@@ -1,4 +1,8 @@
-import type { ParsedSchema, SchemaFormat, SchemaGroup } from "@/types/schema";
+import type {
+  ParsedSchema,
+  SchemaCodeFormat,
+  SchemaGroup
+} from "@/types/schema";
 import { downloadTextFile, slugifyIdentifier } from "@/lib/utils";
 
 export type ExportKind = "json" | "code" | "png" | "pdf";
@@ -12,7 +16,7 @@ export interface SourceExportPayload {
   schemeName: string;
   schema: ParsedSchema;
   code: string;
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   nodePositions: Record<string, { x: number; y: number }>;
   groups: SchemaGroup[];
 }

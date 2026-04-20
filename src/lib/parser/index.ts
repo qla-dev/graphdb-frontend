@@ -1,10 +1,17 @@
-import type { ParseResult, SchemaFormat, SourceRange } from "@/types/schema";
+import type {
+  ParseResult,
+  SchemaCodeFormat,
+  SourceRange
+} from "@/types/schema";
 import { parseDbml } from "@/lib/parser/dbml";
 import { parseSql } from "@/lib/parser/sql";
 import { createEmptySchema } from "@/lib/parser/common";
 import { validateSchema } from "@/lib/parser/validation";
 
-export function parseSchema(source: string, format: SchemaFormat): ParseResult {
+export function parseSchema(
+  source: string,
+  format: SchemaCodeFormat
+): ParseResult {
   const trimmed = source.trim();
 
   if (!trimmed) {

@@ -1,0 +1,420 @@
+import { useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Database,
+  GitBranch,
+  KeyRound,
+  Link2,
+  Plus,
+  Trash2
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { useSchemaStore } from "@/lib/store/schema-store";
+import type { SchemaColumn, SchemaTable } from "@/types/schema";
+
+const commonTypes = [
+  "uuid",
+  "varchar",
+  "text",
+  "integer",
+  "bigint",
+  "decimal",
+  "boolean",
+  "timestamp",
+  "timestamptz",
+  "jsonb"
+];
+
+function referenceValue(column: SchemaColumn) {
+  if (!column.references) {
+    return "none";
+  }
+
+  return `${column.references.table}::${column.references.column}`;
+}
+
+function parseReferenceValue(value: string) {
+  if (value === "none") {
+    return null;
+  }
+
+  const [table, column] = value.split("::");
+  return table && column ? { table, column } : null;
+}
+
+function tableRelationshipCount(table: SchemaTable) {
+  return table.columns.filter((column) => column.references).length;
+}
+
+function schemaTableKey(tables: SchemaTable[]) {
+  return String(tables.length);
+}
+
+function ColumnFlags({
+  column,
+  tableId
+}: {
+  column: SchemaColumn;
+  tableId: string;
+}) {
+  const updateColumn = useSchemaStore((state) => state.updateColumn);
+  const flags = [
+    {
+      label: "PK",
+      title: "Primary key",
+      active: column.isPrimaryKey,
+      onClick: () =>
+        updateColumn(tableId, column.id, {
+          isPrimaryKey: !column.isPrimaryKey,
+          nullable: column.isPrimaryKey ? column.nullable : false
+        })
+    },
+    {
+      label: "Required",
+      title: "Required value",
+      active: !column.nullable,
+      onClick: () =>
+        updateColumn(tableId, column.id, { nullable: !column.nullable })
+    },
+    {
+      label: "Unique",
+      title: "Unique value",
+      active: column.isUnique,
+      onClick: () =>
+        updateColumn(tableId, column.id, { isUnique: !column.isUnique })
+    }
+  ];
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {flags.map((flag) => (
+        <button
+          key={flag.label}
+          type="button"
+          title={flag.title}
+          onClick={flag.onClick}
+          className={`h-7 rounded border px-2 text-[11px] font-semibold transition-colors ${
+            flag.active
+              ? "border-primary/60 bg-primary/14 text-primary"
+              : "border-border bg-background text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {flag.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ColumnRow({
+  table,
+  column,
+  tables
+}: {
+  table: SchemaTable;
+  column: SchemaColumn;
+  tables: SchemaTable[];
+}) {
+  const updateColumn = useSchemaStore((state) => state.updateColumn);
+  const deleteColumn = useSchemaStore((state) => state.deleteColumn);
+  const setColumnReference = useSchemaStore((state) => state.setColumnReference);
+  const referenceOptions = useMemo(
+    () =>
+      tables.flatMap((targetTable) =>
+        targetTable.columns.map((targetColumn) => ({
+          value: `${targetTable.name}::${targetColumn.name}`,
+          label: `${targetTable.name}.${targetColumn.name}`,
+          type: targetColumn.type,
+          disabled:
+            targetTable.id === table.id && targetColumn.id === column.id
+        }))
+      ),
+    [column.id, table.id, tables]
+  );
+
+  return (
+    <div className="border-border bg-secondary/85 grid gap-2 rounded-md border p-2 dark:bg-[#090909]">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <Input
+          value={column.name}
+          onChange={(event) =>
+            updateColumn(table.id, column.id, { name: event.target.value })
+          }
+          aria-label={`${column.name} column name`}
+        />
+        <div className="flex gap-2">
+          <Input
+            value={column.type}
+            list="schema-ui-common-types"
+            onChange={(event) =>
+              updateColumn(table.id, column.id, { type: event.target.value })
+            }
+            aria-label={`${column.name} data type`}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => deleteColumn(table.id, column.id)}
+            aria-label={`Delete ${column.name}`}
+            className="shrink-0"
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-2 xl:grid-cols-[auto_minmax(0,1fr)]">
+        <ColumnFlags tableId={table.id} column={column} />
+        <Select
+          value={referenceValue(column)}
+          onValueChange={(value) =>
+            setColumnReference(
+              table.id,
+              column.id,
+              parseReferenceValue(value)
+            )
+          }
+        >
+          <SelectTrigger className="h-8">
+            <SelectValue placeholder="No link" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">No link</SelectItem>
+            {referenceOptions.map((option) => (
+              <SelectItem
+                key={option.value}
+                value={option.value}
+                disabled={option.disabled}
+              >
+                {option.label} - {option.type}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+}
+
+export function SchemaUiEditor() {
+  const schema = useSchemaStore((state) => state.schema);
+  const addTable = useSchemaStore((state) => state.addTable);
+  const updateTable = useSchemaStore((state) => state.updateTable);
+  const deleteTable = useSchemaStore((state) => state.deleteTable);
+  const addColumn = useSchemaStore((state) => state.addColumn);
+  const tableKey = schemaTableKey(schema.tables);
+  const [openTableIndexes, setOpenTableIndexes] = useState<number[]>([]);
+  const [openStateKey, setOpenStateKey] = useState(tableKey);
+  const [tablePendingDelete, setTablePendingDelete] =
+    useState<SchemaTable | null>(null);
+
+  const activeOpenTableIndexes =
+    openStateKey === tableKey ? openTableIndexes : [];
+
+  const toggleTable = (tableIndex: number) => {
+    setOpenStateKey(tableKey);
+    setOpenTableIndexes((current) =>
+      current.includes(tableIndex)
+        ? current.filter((index) => index !== tableIndex)
+        : [...current, tableIndex]
+    );
+  };
+
+  return (
+    <div className="border-border bg-card h-full min-h-0 border-y dark:bg-[#0d0d0c]">
+      <datalist id="schema-ui-common-types">
+        {commonTypes.map((type) => (
+          <option key={type} value={type} />
+        ))}
+      </datalist>
+
+      <ScrollArea className="h-full">
+        <div className="space-y-3 p-3">
+          <div className="border-border bg-secondary/45 rounded-md border p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Builder</div>
+                <p className="text-muted-foreground mt-1 text-xs leading-5">
+                  Name tables, choose field types, mark keys, and connect data.
+                </p>
+              </div>
+              <Button type="button" size="sm" onClick={addTable}>
+                <Plus className="size-4" />
+                Table
+              </Button>
+            </div>
+          </div>
+
+          {schema.tables.length === 0 ? (
+            <div className="border-border text-muted-foreground rounded-md border p-5 text-center text-sm">
+              Start with a table.
+            </div>
+          ) : null}
+
+          {schema.tables.map((table, tableIndex) => {
+            const isOpen = activeOpenTableIndexes.includes(tableIndex);
+
+            return (
+              <section
+                key={`table-${tableIndex}`}
+                className="border-border bg-secondary/35 overflow-hidden rounded-md border dark:bg-[#181817]"
+              >
+                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 p-2">
+                  <button
+                    type="button"
+                    onClick={() => toggleTable(tableIndex)}
+                    className="text-muted-foreground hover:text-foreground flex size-8 items-center justify-center rounded border border-transparent hover:border-border"
+                    aria-label={isOpen ? "Collapse table" : "Expand table"}
+                  >
+                    {isOpen ? (
+                      <ChevronDown className="size-4" />
+                    ) : (
+                      <ChevronRight className="size-4" />
+                    )}
+                  </button>
+
+                  <div className="min-w-0">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge variant="secondary" className="gap-1">
+                        <Database className="size-3" />
+                        {table.columns.length} fields
+                      </Badge>
+                      <Badge variant="secondary" className="gap-1">
+                        <GitBranch className="size-3" />
+                        {tableRelationshipCount(table)} links
+                      </Badge>
+                    </div>
+                    <Input
+                      value={table.name}
+                      onChange={(event) =>
+                        updateTable(table.id, { name: event.target.value })
+                      }
+                      aria-label={`${table.name} table name`}
+                      className="font-semibold"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setTablePendingDelete(table)}
+                    aria-label={`Delete ${table.name}`}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </div>
+
+                {isOpen ? (
+                  <div className="border-border bg-secondary/65 space-y-2 border-t p-2 dark:bg-[#10100f]">
+                    <div className="text-muted-foreground flex items-center gap-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase">
+                      <KeyRound className="size-3.5" />
+                      Fields
+                    </div>
+                    {table.columns.map((column, columnIndex) => (
+                      <ColumnRow
+                        key={`column-${columnIndex}`}
+                        table={table}
+                        column={column}
+                        tables={schema.tables}
+                      />
+                    ))}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addColumn(table.id)}
+                      className="w-full"
+                    >
+                      <Plus className="size-4" />
+                      Add field
+                    </Button>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+
+          {schema.relationships.length > 0 ? (
+            <section className="border-border bg-secondary/30 rounded-md border p-3">
+              <div className="text-muted-foreground mb-2 flex items-center gap-2 text-[11px] font-semibold tracking-[0.14em] uppercase">
+                <Link2 className="size-3.5" />
+                Connections
+              </div>
+              <div className="space-y-1">
+                {schema.relationships.map((relationship) => (
+                  <div
+                    key={relationship.id}
+                    className="text-muted-foreground truncate text-xs"
+                  >
+                    {relationship.label}
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      </ScrollArea>
+
+      <Dialog
+        open={Boolean(tablePendingDelete)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setTablePendingDelete(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete table?</DialogTitle>
+            <DialogDescription>
+              This will remove {tablePendingDelete?.name ?? "this table"} and
+              clear links pointing to it.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setTablePendingDelete(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => {
+                if (tablePendingDelete) {
+                  deleteTable(tablePendingDelete.id);
+                }
+                setTablePendingDelete(null);
+              }}
+            >
+              Delete table
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

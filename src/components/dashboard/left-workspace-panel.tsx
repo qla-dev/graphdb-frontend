@@ -13,6 +13,7 @@ import {
   Play,
   RotateCcw,
   Sparkles,
+  Undo2,
   Wand2
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,9 +23,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SchemaEditor } from "@/components/editor/schema-editor";
+import { SchemaUiEditor } from "@/components/editor/schema-ui-editor";
 import { formatLabels, samplePresets } from "@/lib/samples";
 import { useSchemaStore } from "@/lib/store/schema-store";
-import type { SchemaFormat } from "@/types/schema";
+import type { SchemaCodeFormat, SchemaFormat } from "@/types/schema";
 
 const prompts = [
   "Create users, orders, products, categories, payments and foreign keys",
@@ -183,8 +185,10 @@ export function LeftWorkspacePanel({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const code = useSchemaStore((state) => state.code);
   const format = useSchemaStore((state) => state.format);
+  const codeFormat = useSchemaStore((state) => state.codeFormat);
   const schema = useSchemaStore((state) => state.schema);
   const errors = useSchemaStore((state) => state.errors);
+  const undoCount = useSchemaStore((state) => state.undoStack.length);
   const aiPrompt = useSchemaStore((state) => state.aiPrompt);
   const history = useSchemaStore((state) => state.history);
   const isGenerating = useSchemaStore((state) => state.isGenerating);
@@ -193,6 +197,7 @@ export function LeftWorkspacePanel({
   const setFormat = useSchemaStore((state) => state.setFormat);
   const loadPreset = useSchemaStore((state) => state.loadPreset);
   const resetCode = useSchemaStore((state) => state.resetCode);
+  const undo = useSchemaStore((state) => state.undo);
   const setAiPrompt = useSchemaStore((state) => state.setAiPrompt);
   const generateFromPrompt = useSchemaStore(
     (state) => state.generateFromPrompt
@@ -243,7 +248,14 @@ export function LeftWorkspacePanel({
         await wait(index === 1 ? 260 : 320);
       }
 
-      setCode(text);
+      const lowerName = file.name.toLowerCase();
+      const detectedFormat: SchemaCodeFormat = lowerName.endsWith(".dbml")
+        ? "dbml"
+        : lowerName.endsWith(".sql")
+          ? "sql"
+          : codeFormat;
+      useSchemaStore.getState().setFormat(detectedFormat);
+      useSchemaStore.getState().setCode(text);
       const state = useSchemaStore.getState();
       setImportProgress({
         fileName: file.name,
@@ -293,6 +305,19 @@ export function LeftWorkspacePanel({
               >
                 {errors.length ? "needs fix" : "live"}
               </Badge>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={undo}
+                disabled={undoCount === 0}
+                className="h-7 gap-1.5 px-2 text-[10px] font-semibold tracking-normal normal-case"
+                aria-label="Undo last change"
+                title={`Undo${undoCount ? ` (${undoCount} available)` : ""}`}
+              >
+                <Undo2 className="size-3.5" />
+                <span className="hidden xl:inline">Undo</span>
+              </Button>
               {onCollapseSidebar ? (
                 <Button
                   type="button"
@@ -314,7 +339,7 @@ export function LeftWorkspacePanel({
             className="m-0 flex min-h-0 flex-1 flex-col"
           >
             <div className="border-border bg-secondary/55 flex flex-wrap items-center gap-2 border-b px-3 py-2 dark:bg-black/20">
-              {(["dbml", "sql", "postgresql"] as SchemaFormat[]).map((item) => (
+              {(["ui", "dbml", "sql", "postgresql"] as SchemaFormat[]).map((item) => (
                 <button
                   key={item}
                   className={`rounded px-2.5 py-1 text-[11px] font-semibold tracking-[0.15em] uppercase transition-colors ${
@@ -330,7 +355,7 @@ export function LeftWorkspacePanel({
             </div>
 
             <div className="min-h-0 flex-1">
-              <SchemaEditor />
+              {format === "ui" ? <SchemaUiEditor /> : <SchemaEditor />}
             </div>
 
             <div className="border-border bg-card/95 space-y-3 border-t p-3 dark:bg-[#10100f]">
@@ -431,7 +456,7 @@ export function LeftWorkspacePanel({
                         Local mock provider, ready for LLM wiring.
                       </p>
                     </div>
-                    <Badge>{formatLabels[format]}</Badge>
+                    <Badge>{formatLabels[codeFormat]}</Badge>
                   </div>
                   <Textarea
                     value={aiPrompt}

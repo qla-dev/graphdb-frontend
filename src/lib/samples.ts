@@ -125,6 +125,7 @@ export const samplePresets: SchemaPreset[] = [
 ];
 
 export const formatLabels = {
+  ui: "UI",
   dbml: "DBML",
   sql: "SQL",
   postgresql: "PostgreSQL"

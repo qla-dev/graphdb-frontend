@@ -1,8 +1,8 @@
 import type {
   ParseError,
   ParsedSchema,
+  SchemaCodeFormat,
   SchemaColumn,
-  SchemaFormat,
   SourceRange
 } from "@/types/schema";
 
@@ -214,13 +214,13 @@ function normalizeType(type: string) {
     .trim();
 }
 
-function allowedTypesFor(format: SchemaFormat) {
+function allowedTypesFor(format: SchemaCodeFormat) {
   return format === "dbml" ? dbmlTypes : commonTypes;
 }
 
 function validateType(
   column: SchemaColumn,
-  format: SchemaFormat
+  format: SchemaCodeFormat
 ): ParseError | null {
   const type = normalizeType(column.type);
   const candidates = allowedTypesFor(format);
@@ -247,7 +247,10 @@ function validateType(
   };
 }
 
-function validateKeywords(source: string, format: SchemaFormat): ParseError[] {
+function validateKeywords(
+  source: string,
+  format: SchemaCodeFormat
+): ParseError[] {
   const lines = source.split(/\r?\n/);
   const checks = keywordChecks.filter(
     (check) =>
@@ -270,7 +273,7 @@ function validateKeywords(source: string, format: SchemaFormat): ParseError[] {
 
 export function validateSchema(
   source: string,
-  format: SchemaFormat,
+  format: SchemaCodeFormat,
   schema: ParsedSchema
 ): ParseError[] {
   const typeErrors = schema.tables.flatMap((table) =>

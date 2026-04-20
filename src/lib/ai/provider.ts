@@ -1,8 +1,8 @@
-import type { AiProviderResponse, SchemaFormat } from "@/types/schema";
+import type { AiProviderResponse, SchemaCodeFormat } from "@/types/schema";
 
 export interface GenerateSchemaRequest {
   prompt: string;
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   currentCode: string;
 }
 

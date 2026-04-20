@@ -1,7 +1,7 @@
 import type {
   ParseResult,
   ParsedSchema,
-  SchemaFormat,
+  SchemaCodeFormat,
   SchemaTable,
   SourceRange
 } from "@/types/schema";
@@ -113,7 +113,7 @@ function buildRelationship(schema: ParsedSchema, pending: PendingReference) {
 
 export function parseDbml(
   source: string,
-  format: SchemaFormat = "dbml"
+  format: SchemaCodeFormat = "dbml"
 ): ParseResult {
   const schema = createEmptySchema(format, source);
   const pendingReferences: PendingReference[] = [];
@@ -212,6 +212,7 @@ export function parseDbml(
     const isPrimaryKey = /\[(?=[^\]]*(primary key|pk))/i.test(
       columnInfo.settings
     );
+    const isUnique = /\[(?=[^\]]*\bunique\b)/i.test(columnInfo.settings);
     const nullable =
       !/\[(?=[^\]]*(not null))/i.test(columnInfo.settings) && !isPrimaryKey;
     const refMatchInline = columnInfo.settings.match(
@@ -225,6 +226,7 @@ export function parseDbml(
       range,
       {
         isPrimaryKey,
+        isUnique,
         nullable,
         isForeignKey: Boolean(refMatchInline)
       }

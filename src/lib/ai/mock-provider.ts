@@ -1,4 +1,4 @@
-import type { AiProviderResponse, SchemaFormat } from "@/types/schema";
+import type { AiProviderResponse, SchemaCodeFormat } from "@/types/schema";
 import type {
   AiSchemaProvider,
   GenerateSchemaRequest
@@ -266,7 +266,7 @@ function pickEntities(prompt: string) {
   return entityOrder.filter((key) => picked.has(key));
 }
 
-function render(format: SchemaFormat, entities: EntityKey[]) {
+function render(format: SchemaCodeFormat, entities: EntityKey[]) {
   const blocks = format === "dbml" ? dbmlBlocks : sqlBlocks;
   const body = entities.map((entity) => blocks[entity]).join("\n\n");
 

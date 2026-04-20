@@ -2,8 +2,8 @@ import type {
   ParseError,
   ParseResult,
   ParsedSchema,
+  SchemaCodeFormat,
   SchemaColumn,
-  SchemaFormat,
   SchemaTable,
   SourceRange
 } from "@/types/schema";
@@ -360,11 +360,13 @@ function parseColumnDefinition(
   const rawType = boundary ? rest.slice(0, boundary.index).trim() : rest;
   const normalizedType = rawType.replace(/\s+/g, " ");
   const isPrimaryKey = /\bprimary\s+key\b/i.test(rest);
+  const isUnique = /\bunique\b/i.test(rest);
   const nullable = !/\bnot\s+null\b/i.test(rest) && !isPrimaryKey;
   const sourceRange = rangeFromOffsets(source, chunk.start, chunk.end);
 
   return makeColumn(tableName, name, normalizedType, sourceRange, {
     isPrimaryKey,
+    isUnique,
     nullable,
     isForeignKey: /\breferences\b/i.test(rest)
   });
@@ -519,7 +521,7 @@ function buildRelationship(schema: ParsedSchema, pending: PendingReference) {
   markForeignKey(schema, relationship);
 }
 
-export function parseSql(source: string, format: SchemaFormat): ParseResult {
+export function parseSql(source: string, format: SchemaCodeFormat): ParseResult {
   const schema = createEmptySchema(format, source);
   const errors: ParseError[] = [];
   const pendingReferences: PendingReference[] = [];

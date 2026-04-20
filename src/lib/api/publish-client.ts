@@ -1,4 +1,8 @@
-import type { ParsedSchema, PublishedApi, SchemaFormat } from "@/types/schema";
+import type {
+  ParsedSchema,
+  PublishedApi,
+  SchemaCodeFormat
+} from "@/types/schema";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
@@ -29,7 +33,7 @@ async function readJson<T>(response: Response): Promise<T> {
 
 export interface StartPublishPayload {
   schemeName: string;
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   code: string;
   schema: ParsedSchema;
 }

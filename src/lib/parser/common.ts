@@ -1,7 +1,7 @@
 import type {
   ParsedSchema,
   SchemaColumn,
-  SchemaFormat,
+  SchemaCodeFormat,
   SchemaRelationship,
   SchemaTable,
   SourceRange
@@ -9,7 +9,7 @@ import type {
 import { slugifyIdentifier } from "@/lib/utils";
 
 export function createEmptySchema(
-  format: SchemaFormat,
+  format: SchemaCodeFormat,
   source: string,
   warnings: string[] = []
 ): ParsedSchema {
@@ -159,6 +159,7 @@ export function makeColumn(
     nullable: true,
     isPrimaryKey: false,
     isForeignKey: false,
+    isUnique: false,
     source,
     ...overrides
   };

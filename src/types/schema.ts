@@ -1,4 +1,7 @@
-export type SchemaFormat = "dbml" | "sql" | "postgresql";
+export type SchemaCodeFormat = "dbml" | "sql" | "postgresql";
+export type SchemaFormat = "ui" | SchemaCodeFormat;
+
+export type SchemaCodeByFormat = Record<SchemaCodeFormat, string>;
 
 export type SchemaElementKind = "table" | "column" | "relationship" | "group";
 export type ValidationSeverity = "error" | "warning";
@@ -39,6 +42,7 @@ export interface SchemaColumn {
   nullable: boolean;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
+  isUnique: boolean;
   references?: ColumnReference;
   source?: SourceRange;
 }
@@ -67,7 +71,7 @@ export interface SchemaRelationship {
 }
 
 export interface ParsedSchema {
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   tables: SchemaTable[];
   relationships: SchemaRelationship[];
   source: string;
@@ -94,13 +98,13 @@ export interface SchemaPreset {
   id: string;
   name: string;
   description: string;
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   code: string;
 }
 
 export interface AiProviderResponse {
   code: string;
-  format: SchemaFormat;
+  format: SchemaCodeFormat;
   summary: string;
 }
 
@@ -117,6 +121,8 @@ export interface PersistedScheme {
   name: string;
   code: string;
   format: SchemaFormat;
+  codeFormat?: SchemaCodeFormat;
+  codeByFormat?: Partial<SchemaCodeByFormat>;
   nodePositions: Record<string, CanvasPoint>;
   groups: SchemaGroup[];
   createdAt: number;

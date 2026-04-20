@@ -85,15 +85,15 @@ interface TopNavProps {
 
 function saveStatusCopy(status: string) {
   if (status === "saving") {
-    return "saving";
+    return "Saving";
   }
   if (status === "dirty") {
-    return "unsaved changes";
+    return "Saving";
   }
   if (status === "error") {
-    return "save error";
+    return "Save error";
   }
-  return "saved";
+  return "Saved";
 }
 
 function sleep(ms: number) {
@@ -118,6 +118,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     useState<PublishStatusResponse | null>(null);
   const code = useSchemaStore((state) => state.code);
   const format = useSchemaStore((state) => state.format);
+  const codeFormat = useSchemaStore((state) => state.codeFormat);
   const schemeName = useSchemaStore((state) => state.schemeName);
   const schema = useSchemaStore((state) => state.schema);
   const errors = useSchemaStore((state) => state.errors);
@@ -198,7 +199,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       schemeName,
       schema,
       code,
-      format,
+      format: codeFormat,
       nodePositions,
       groups
     });
@@ -260,7 +261,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     try {
       const started = await startPublish({
         schemeName,
-        format,
+        format: codeFormat,
         code,
         schema
       });
@@ -325,8 +326,8 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <header className="border-border bg-background/92 text-foreground flex h-14 shrink-0 items-center justify-between border-b px-3 shadow-[0_1px_0_rgba(255,255,255,0.04)] backdrop-blur md:px-4 dark:bg-[#070707]/95 dark:text-[#f2f2ee]">
-        <div className="flex min-w-0 items-center gap-3 md:gap-5">
+      <header className="border-border bg-background/92 text-foreground flex h-14 shrink-0 items-center justify-start gap-3 overflow-hidden border-b px-3 shadow-[0_1px_0_rgba(255,255,255,0.04)] backdrop-blur md:gap-5 md:px-4 dark:bg-[#070707]/95 dark:text-[#f2f2ee]">
+        <div className="flex min-w-0 shrink-0 items-center gap-3 md:gap-5">
           <div className="flex items-center gap-2">
             <div className="border-primary/30 bg-primary text-primary-foreground flex size-8 items-center justify-center rounded-md border shadow-[0_0_28px_rgba(52,211,153,0.24)]">
               <DatabaseZap className="size-4" />
@@ -335,16 +336,13 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
               <div className="text-foreground text-sm font-semibold tracking-tight dark:text-white">
                 GraphDB Studio
               </div>
-              <div className="text-muted-foreground text-[10px] tracking-[0.18em] uppercase">
-                Schema graph
-              </div>
             </div>
           </div>
 
           <div className="bg-border hidden h-6 w-px md:block" />
 
-          <div className="min-w-0">
-            <div className="group flex h-6 w-[min(360px,34vw)] min-w-52 items-center gap-2">
+          <div className="min-w-0 max-w-[min(360px,34vw)]">
+            <div className="group flex h-6 min-w-36 max-w-full items-center gap-2">
               {isEditingName ? (
                 <Input
                   autoFocus
@@ -387,93 +385,101 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="hidden w-36 sm:block">
-            <Select
-              value={format}
-              onValueChange={(value) => setFormat(value as SchemaFormat)}
-            >
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(["dbml", "sql", "postgresql"] as SchemaFormat[]).map(
-                  (item) => (
-                    <SelectItem value={item} key={item}>
-                      {formatLabels[item]}
-                    </SelectItem>
-                  )
-                )}
-              </SelectContent>
-            </Select>
+        <div className="bg-border hidden h-6 w-px shrink-0 md:block" />
+
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="hidden w-36 sm:block">
+              <Select
+                value={format}
+                onValueChange={(value) => setFormat(value as SchemaFormat)}
+              >
+                <SelectTrigger className="h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(["ui", "dbml", "sql", "postgresql"] as SchemaFormat[]).map(
+                    (item) => (
+                      <SelectItem value={item} key={item}>
+                        {formatLabels[item]}
+                      </SelectItem>
+                    )
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setNewSchemeOpen(true)}
+                  aria-label="New scheme"
+                >
+                  <FilePlus2 className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>New scheme</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setLoadSchemesOpen(true)}
+                  aria-label="Load schemes"
+                >
+                  <FolderOpen className="size-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Load schemes</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void saveCurrentScheme()}
+                  aria-label="Cloud save"
+                  className={
+                    saveStatus === "dirty"
+                      ? "text-amber-300"
+                      : saveStatus === "error"
+                        ? "text-destructive"
+                        : saveStatus === "saved"
+                          ? "text-primary"
+                          : undefined
+                  }
+                >
+                  {saveStatus === "saving" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : saveStatus === "saved" ? (
+                    <Cloud className="size-4" />
+                  ) : saveStatus === "error" ? (
+                    <AlertTriangle className="size-4" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {saveStatusCopy(saveStatus)}
+                {lastSavedAt && saveStatus === "saved"
+                  ? ` at ${new Date(lastSavedAt).toLocaleTimeString()}`
+                  : ""}
+              </TooltipContent>
+            </Tooltip>
+            <span className="text-muted-foreground hidden w-24 truncate text-xs xl:inline">
+              {saveStatusCopy(saveStatus)}
+            </span>
           </div>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setNewSchemeOpen(true)}
-                aria-label="New scheme"
-              >
-                <FilePlus2 className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>New scheme</TooltipContent>
-          </Tooltip>
+          <div className="min-w-4 flex-1" />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLoadSchemesOpen(true)}
-                aria-label="Load schemes"
-              >
-                <FolderOpen className="size-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Load schemes</TooltipContent>
-          </Tooltip>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => void saveCurrentScheme()}
-                aria-label="Cloud save"
-                className={
-                  saveStatus === "dirty"
-                    ? "text-amber-300"
-                    : saveStatus === "error"
-                      ? "text-destructive"
-                      : saveStatus === "saved"
-                        ? "text-primary"
-                        : undefined
-                }
-              >
-                {saveStatus === "saving" ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : saveStatus === "saved" ? (
-                  <Cloud className="size-4" />
-                ) : saveStatus === "error" ? (
-                  <AlertTriangle className="size-4" />
-                ) : (
-                  <Save className="size-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {saveStatusCopy(saveStatus)}
-              {lastSavedAt && saveStatus === "saved"
-                ? ` at ${new Date(lastSavedAt).toLocaleTimeString()}`
-                : ""}
-            </TooltipContent>
-          </Tooltip>
-          <span className="text-muted-foreground hidden w-24 truncate text-xs xl:inline">
-            {saveStatusCopy(saveStatus)}
-          </span>
+          <div className="flex shrink-0 items-center gap-2">
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -590,6 +596,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
           <div className="border-border bg-secondary text-muted-foreground hidden h-9 items-center gap-2 rounded-md border px-3 text-xs lg:flex">
             <Braces className="text-accent size-3.5" />
             Live parse
+          </div>
           </div>
         </div>
       </header>

@@ -4,7 +4,9 @@ const storageKey = "graphdb.projects.v1";
 const legacyStorageKey = "graphdb.schemes.v1";
 const activeProjectKey = "graphdb.activeProjectId.v1";
 const legacyActiveSchemeKey = "graphdb.activeSchemeId.v1";
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const PROD_API_BASE_URL = "https://roomsita.com/backend/public/api";
+// const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api";
+const DEFAULT_API_BASE_URL = PROD_API_BASE_URL;
 
 function apiBaseUrl() {
   return (
@@ -16,7 +18,7 @@ function apiBaseUrl() {
 }
 
 function apiUrl(path: string) {
-  return `${apiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${apiBaseUrl()}/${path.replace(/^\/+/, "")}`;
 }
 
 function browserStorage() {
@@ -74,7 +76,7 @@ function saveLocalProjects(projects: PersistedProject[]) {
 }
 
 async function fetchBackendProjects(): Promise<PersistedProject[]> {
-  const response = await fetch(apiUrl("/api/projects"), {
+  const response = await fetch(apiUrl("projects"), {
     headers: { Accept: "application/json" }
   });
 
@@ -87,7 +89,7 @@ async function fetchBackendProjects(): Promise<PersistedProject[]> {
 }
 
 async function syncBackendProjects(projects: PersistedProject[]) {
-  const response = await fetch(apiUrl("/api/projects"), {
+  const response = await fetch(apiUrl("projects"), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",

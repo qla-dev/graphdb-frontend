@@ -4,7 +4,9 @@ import type {
   SchemaCodeFormat
 } from "@/types/schema";
 
-const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const PROD_API_BASE_URL = "https://roomsita.com/backend/public/api";
+// const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api";
+const DEFAULT_API_BASE_URL = PROD_API_BASE_URL;
 
 function apiBaseUrl() {
   return (
@@ -16,7 +18,7 @@ function apiBaseUrl() {
 }
 
 function apiUrl(path: string) {
-  return `${apiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`;
+  return `${apiBaseUrl()}/${path.replace(/^\/+/, "")}`;
 }
 
 async function readJson<T>(response: Response): Promise<T> {
@@ -56,7 +58,7 @@ export interface PublishStatusResponse {
 }
 
 export async function startPublish(payload: StartPublishPayload) {
-  const response = await fetch(apiUrl("/api/publish"), {
+  const response = await fetch(apiUrl("publish"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -69,7 +71,7 @@ export async function startPublish(payload: StartPublishPayload) {
 }
 
 export async function getPublishStatus(id: string) {
-  const response = await fetch(apiUrl(`/api/publish/${id}`), {
+  const response = await fetch(apiUrl(`publish/${id}`), {
     headers: {
       Accept: "application/json"
     }

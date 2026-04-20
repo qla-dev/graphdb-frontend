@@ -4,6 +4,7 @@ const storageKey = "graphdb.projects.v1";
 const legacyStorageKey = "graphdb.schemes.v1";
 const activeProjectKey = "graphdb.activeProjectId.v1";
 const legacyActiveSchemeKey = "graphdb.activeSchemeId.v1";
+const codeEncoding = "base64";
 const PROD_API_BASE_URL = "https://roomsita.com/backend/public/api";
 // const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api";
 const DEFAULT_API_BASE_URL = PROD_API_BASE_URL;
@@ -75,6 +76,41 @@ function saveLocalProjects(projects: PersistedProject[]) {
   storage.setItem(storageKey, JSON.stringify(projects));
 }
 
+function encodeTextForTransport(value: string) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+
+  return btoa(binary);
+}
+
+function encodeCodeByFormat(
+  codeByFormat: PersistedProject["codeByFormat"]
+): PersistedProject["codeByFormat"] {
+  if (!codeByFormat) {
+    return codeByFormat;
+  }
+
+  return Object.fromEntries(
+    Object.entries(codeByFormat).map(([format, code]) => [
+      format,
+      typeof code === "string" ? encodeTextForTransport(code) : code
+    ])
+  );
+}
+
+function encodeProjectForTransport(project: PersistedProject): PersistedProject {
+  return {
+    ...project,
+    code: encodeTextForTransport(project.code ?? ""),
+    codeByFormat: encodeCodeByFormat(project.codeByFormat)
+  };
+}
+
 async function fetchBackendProjects(): Promise<PersistedProject[]> {
   const response = await fetch(apiUrl("projects"), {
     headers: { Accept: "application/json" }
@@ -89,13 +125,16 @@ async function fetchBackendProjects(): Promise<PersistedProject[]> {
 }
 
 async function syncBackendProjects(projects: PersistedProject[]) {
-  const response = await fetch(apiUrl("projects"), {
-    method: "PUT",
+  const response = await fetch(apiUrl("projects/sync"), {
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json"
     },
-    body: JSON.stringify({ projects })
+    body: JSON.stringify({
+      codeEncoding,
+      projects: projects.map(encodeProjectForTransport)
+    })
   });
 
   if (!response.ok) {

@@ -44,6 +44,21 @@ const commonTypes = [
   "jsonb"
 ];
 
+const typeAliases: Record<string, string> = {
+  bool: "boolean",
+  boolean: "boolean",
+  decimal: "decimal",
+  int: "integer",
+  int4: "integer",
+  int8: "bigint",
+  integer: "integer",
+  numeric: "decimal",
+  "character varying": "varchar",
+  "double precision": "double",
+  "timestamp without time zone": "timestamp",
+  "timestamp with time zone": "timestamptz"
+};
+
 function referenceValue(column: SchemaColumn) {
   if (!column.references) {
     return "none";
@@ -65,6 +80,54 @@ function truncateLinkLabel(value: string, maxLength = 5) {
   return value.length > maxLength
     ? `${value.slice(0, maxLength)}..`
     : value;
+}
+
+function truncateTypeLabel(value: string, maxLength = 8) {
+  return value.length > maxLength
+    ? `${value.slice(0, maxLength)}..`
+    : value;
+}
+
+function normalizedTypeSignature(type: string) {
+  const normalized = type.trim().toLowerCase().replace(/\s+/g, " ");
+  const match = normalized.match(/^(.+?)(?:\(([^)]*)\))?$/);
+  const baseType = (match?.[1] ?? normalized).trim();
+  const lengthSpec = (match?.[2] ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(",");
+
+  const canonicalBaseType = typeAliases[baseType] ?? baseType;
+
+  return {
+    baseType: canonicalBaseType,
+    lengthSpec
+  };
+}
+
+function linkCompatibility(sourceType: string, targetType: string) {
+  const sourceSignature = normalizedTypeSignature(sourceType);
+  const targetSignature = normalizedTypeSignature(targetType);
+
+  if (sourceSignature.baseType !== targetSignature.baseType) {
+    return {
+      isCompatible: false,
+      reason: "Type mismatch"
+    };
+  }
+
+  if (sourceSignature.lengthSpec !== targetSignature.lengthSpec) {
+    return {
+      isCompatible: false,
+      reason: "Length mismatch"
+    };
+  }
+
+  return {
+    isCompatible: true,
+    reason: "Compatible"
+  };
 }
 
 function tableRelationshipCount(table: SchemaTable) {
@@ -157,7 +220,11 @@ function ColumnTypeSelect({
       onValueChange={(value) => updateColumn(tableId, column.id, { type: value })}
     >
       <SelectTrigger className="h-9 min-w-0 flex-1" aria-label={`${column.name} data type`}>
-        <SelectValue placeholder="Select type" />
+        <SelectValue placeholder="Select type">
+          <span className="block max-w-full overflow-hidden whitespace-nowrap">
+            {truncateTypeLabel(column.type)}
+          </span>
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {typeOptions.map((type, index) => (
@@ -185,15 +252,22 @@ function ColumnRow({
   const referenceOptions = useMemo(
     () =>
       tables.flatMap((targetTable) =>
-        targetTable.columns.map((targetColumn) => ({
-          value: `${targetTable.name}::${targetColumn.name}`,
-          label: `${targetTable.name}.${targetColumn.name}`,
-          type: targetColumn.type,
-          disabled:
-            targetTable.id === table.id && targetColumn.id === column.id
-        }))
+        targetTable.columns.map((targetColumn) => {
+          const isSameColumn =
+            targetTable.id === table.id && targetColumn.id === column.id;
+          const compatibility = linkCompatibility(column.type, targetColumn.type);
+
+          return {
+            value: `${targetTable.name}::${targetColumn.name}`,
+            label: `${targetTable.name}.${targetColumn.name}`,
+            type: targetColumn.type,
+            disabled: isSameColumn || !compatibility.isCompatible,
+            isCompatible: compatibility.isCompatible && !isSameColumn,
+            reason: isSameColumn ? "Same field" : compatibility.reason
+          };
+        })
       ),
-    [column.id, table.id, tables]
+    [column.id, column.type, table.id, tables]
   );
   const selectedReferenceLabel =
     referenceOptions.find((option) => option.value === referenceValue(column))
@@ -201,7 +275,7 @@ function ColumnRow({
 
   return (
     <div className="border-border bg-secondary/85 grid gap-2 rounded-md border p-2 dark:bg-[#090909]">
-      <div className="grid gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      <div className="grid gap-2 sm:grid-cols-2">
         <Input
           value={column.name}
           onChange={(event) =>
@@ -255,8 +329,18 @@ function ColumnRow({
                 key={option.value}
                 value={option.value}
                 disabled={option.disabled}
+                className={
+                  option.isCompatible
+                    ? "text-primary focus:bg-primary/10 focus:text-primary"
+                    : "text-destructive data-[disabled]:text-destructive data-[disabled]:opacity-100"
+                }
               >
-                {option.label} - {option.type}
+                <div className="flex w-full items-center justify-between gap-3">
+                  <span className="truncate">{option.label}</span>
+                  <span className="shrink-0 text-[11px] font-semibold">
+                    {option.isCompatible ? option.type : option.reason}
+                  </span>
+                </div>
               </SelectItem>
             ))}
           </SelectContent>
@@ -315,89 +399,95 @@ export function SchemaUiEditor() {
             </div>
           ) : null}
 
-          {schema.tables.map((table, tableIndex) => {
-            const isOpen = activeOpenTableIndexes.includes(tableIndex);
+          {schema.tables.length > 0 ? (
+            <div className="divide-border/60 divide-y">
+              {schema.tables.map((table, tableIndex) => {
+                const isOpen = activeOpenTableIndexes.includes(tableIndex);
 
-            return (
-              <section
-                key={`table-${tableIndex}`}
-                className="border-border bg-secondary/35 overflow-hidden rounded-md border dark:bg-[#181817]"
-              >
-                <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 p-2">
-                  <button
-                    type="button"
-                    onClick={() => toggleTable(tableIndex)}
-                    className="text-muted-foreground hover:text-foreground flex size-8 items-center justify-center rounded border border-transparent hover:border-border"
-                    aria-label={isOpen ? "Collapse table" : "Expand table"}
+                return (
+                  <div
+                    key={`table-${tableIndex}`}
+                    className="py-3 first:pt-0 last:pb-0"
                   >
-                    {isOpen ? (
-                      <ChevronDown className="size-4" />
-                    ) : (
-                      <ChevronRight className="size-4" />
-                    )}
-                  </button>
+                    <section className="border-border bg-secondary/35 overflow-hidden rounded-md border dark:bg-[#181817]">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 p-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleTable(tableIndex)}
+                          className="text-muted-foreground hover:text-foreground flex size-8 items-center justify-center rounded border border-transparent hover:border-border"
+                          aria-label={isOpen ? "Collapse table" : "Expand table"}
+                        >
+                          {isOpen ? (
+                            <ChevronDown className="size-4" />
+                          ) : (
+                            <ChevronRight className="size-4" />
+                          )}
+                        </button>
 
-                  <div className="min-w-0">
-                    <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary" className="gap-1">
-                        <Database className="size-3" />
-                        {table.columns.length} fields
-                      </Badge>
-                      <Badge variant="secondary" className="gap-1">
-                        <GitBranch className="size-3" />
-                        {tableRelationshipCount(table)} links
-                      </Badge>
-                    </div>
-                    <Input
-                      value={table.name}
-                      onChange={(event) =>
-                        updateTable(table.id, { name: event.target.value })
-                      }
-                      aria-label={`${table.name} table name`}
-                      className="font-semibold"
-                    />
+                        <div className="min-w-0">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <Badge variant="secondary" className="gap-1">
+                              <Database className="size-3" />
+                              {table.columns.length} fields
+                            </Badge>
+                            <Badge variant="secondary" className="gap-1">
+                              <GitBranch className="size-3" />
+                              {tableRelationshipCount(table)} links
+                            </Badge>
+                          </div>
+                          <Input
+                            value={table.name}
+                            onChange={(event) =>
+                              updateTable(table.id, { name: event.target.value })
+                            }
+                            aria-label={`${table.name} table name`}
+                            className="font-semibold"
+                          />
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setTablePendingDelete(table)}
+                          aria-label={`Delete ${table.name}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+
+                      {isOpen ? (
+                        <div className="border-border bg-secondary/65 space-y-2 border-t p-2 dark:bg-[#10100f]">
+                          <div className="text-muted-foreground flex items-center gap-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase">
+                            <KeyRound className="size-3.5" />
+                            Fields
+                          </div>
+                          {table.columns.map((column, columnIndex) => (
+                            <ColumnRow
+                              key={`column-${columnIndex}`}
+                              table={table}
+                              column={column}
+                              tables={schema.tables}
+                            />
+                          ))}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addColumn(table.id)}
+                            className="border-primary/50 text-primary hover:border-primary/70 hover:bg-primary/10 hover:text-primary w-full"
+                          >
+                            <Plus className="size-4" />
+                            Add field
+                          </Button>
+                        </div>
+                      ) : null}
+                    </section>
                   </div>
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setTablePendingDelete(table)}
-                    aria-label={`Delete ${table.name}`}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-
-                {isOpen ? (
-                  <div className="border-border bg-secondary/65 space-y-2 border-t p-2 dark:bg-[#10100f]">
-                    <div className="text-muted-foreground flex items-center gap-2 px-1 text-[11px] font-semibold tracking-[0.14em] uppercase">
-                      <KeyRound className="size-3.5" />
-                      Fields
-                    </div>
-                    {table.columns.map((column, columnIndex) => (
-                      <ColumnRow
-                        key={`column-${columnIndex}`}
-                        table={table}
-                        column={column}
-                        tables={schema.tables}
-                      />
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addColumn(table.id)}
-                      className="w-full"
-                    >
-                      <Plus className="size-4" />
-                      Add field
-                    </Button>
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
+                );
+              })}
+            </div>
+          ) : null}
 
           {schema.relationships.length > 0 ? (
             <section className="border-border bg-secondary/30 rounded-md border p-3">

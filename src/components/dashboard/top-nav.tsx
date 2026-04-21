@@ -5,12 +5,14 @@ import {
   Check,
   Cloud,
   Copy,
+  GitBranch,
   DatabaseZap,
   Download,
   FileCode2,
   FileJson,
   FilePlus2,
   FolderOpen,
+  Layers3,
   Loader2,
   Maximize2,
   Minimize2,
@@ -23,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useGraphTheme } from "@/components/providers/theme-provider";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -100,6 +103,13 @@ function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function formatProjectTimestamp(timestamp: number) {
+  return new Date(timestamp).toLocaleString([], {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
 export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const { theme, toggleTheme } = useGraphTheme();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -119,6 +129,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const code = useSchemaStore((state) => state.code);
   const format = useSchemaStore((state) => state.format);
   const codeFormat = useSchemaStore((state) => state.codeFormat);
+  const currentSchemeId = useSchemaStore((state) => state.currentSchemeId);
   const schemeName = useSchemaStore((state) => state.schemeName);
   const schema = useSchemaStore((state) => state.schema);
   const errors = useSchemaStore((state) => state.errors);
@@ -324,6 +335,15 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     toast.success(`${cleaned} created.`);
   };
 
+  const handleLoadSavedScheme = async (schemeId: string) => {
+    if (saveStatus === "dirty") {
+      await saveCurrentScheme();
+    }
+
+    loadScheme(schemeId);
+    setLoadSchemesOpen(false);
+  };
+
   return (
     <TooltipProvider delayDuration={200}>
       <header className="border-border bg-background/92 text-foreground flex h-14 shrink-0 items-center justify-start gap-3 overflow-hidden border-b px-3 shadow-[0_1px_0_rgba(255,255,255,0.04)] backdrop-blur md:gap-5 md:px-4 dark:bg-[#070707]/95 dark:text-[#f2f2ee]">
@@ -416,8 +436,9 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   size="icon"
                   onClick={() => setNewSchemeOpen(true)}
                   aria-label="New project"
+                  className="size-10"
                 >
-                  <FilePlus2 className="size-4" />
+                  <FilePlus2 className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>New project</TooltipContent>
@@ -430,8 +451,9 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   size="icon"
                   onClick={() => setLoadSchemesOpen(true)}
                   aria-label="Load projects"
+                  className="size-10"
                 >
-                  <FolderOpen className="size-4" />
+                  <FolderOpen className="size-5" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Load projects</TooltipContent>
@@ -444,7 +466,8 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   size="icon"
                   onClick={() => void saveCurrentScheme()}
                   aria-label="Cloud save"
-                  className={
+                  className={cn(
+                    "size-10",
                     saveStatus === "dirty"
                       ? "text-amber-300"
                       : saveStatus === "error"
@@ -452,16 +475,16 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                         : saveStatus === "saved"
                           ? "text-primary"
                           : undefined
-                  }
+                  )}
                 >
                   {saveStatus === "saving" ? (
-                    <Loader2 className="size-4 animate-spin" />
+                    <Loader2 className="size-5 animate-spin" />
                   ) : saveStatus === "saved" ? (
-                    <Cloud className="size-4" />
+                    <Cloud className="size-5" />
                   ) : saveStatus === "error" ? (
-                    <AlertTriangle className="size-4" />
+                    <AlertTriangle className="size-5" />
                   ) : (
-                    <Save className="size-4" />
+                    <Save className="size-5" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -472,7 +495,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   : ""}
               </TooltipContent>
             </Tooltip>
-            <span className="text-muted-foreground hidden w-24 truncate text-xs xl:inline">
+            <span className="text-muted-foreground hidden min-w-[6rem] truncate text-sm font-medium xl:inline">
               {saveStatusCopy(saveStatus)}
             </span>
           </div>
@@ -659,7 +682,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       </Dialog>
 
       <Dialog open={loadSchemesOpen} onOpenChange={setLoadSchemesOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>Load project</DialogTitle>
             <DialogDescription>
@@ -671,7 +694,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
             onChange={(event) => setSchemeSearch(event.target.value)}
             placeholder="Search saved projects"
           />
-          <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
+          <div className="grid max-h-[520px] gap-3 overflow-auto pr-1 sm:grid-cols-2">
             {filteredSchemes.length === 0 ? (
               <div className="border-border text-muted-foreground rounded-md border p-6 text-center text-sm">
                 No saved projects found.
@@ -680,43 +703,94 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
               filteredSchemes.map((scheme) => (
                 <div
                   key={scheme.id}
-                  className="border-border bg-secondary/45 grid gap-3 rounded-md border p-3 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void handleLoadSavedScheme(scheme.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void handleLoadSavedScheme(scheme.id);
+                    }
+                  }}
+                  className={cn(
+                    "border-border bg-secondary/35 cursor-pointer rounded-xl border p-4 transition-all hover:border-primary/70 hover:shadow-[inset_0_0_0_1px_rgba(52,211,153,0.35)] hover:bg-secondary/45 focus-visible:border-primary/80 focus-visible:shadow-[inset_0_0_0_1px_rgba(52,211,153,0.5)] focus-visible:outline-none",
+                    scheme.id === currentSchemeId &&
+                      "border-primary/45 bg-primary/6 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.28)]"
+                  )}
                 >
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold">
-                      {scheme.name}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="truncate text-base font-semibold">
+                            {scheme.name}
+                          </div>
+                          {scheme.id === currentSchemeId ? (
+                            <Badge>Current</Badge>
+                          ) : null}
+                        </div>
+                      </div>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteScheme(scheme.id);
+                          toast.success("Project deleted.");
+                        }}
+                        aria-label={`Delete ${scheme.name}`}
+                        className="shrink-0"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
                     </div>
                     <div className="text-muted-foreground mt-1 text-xs">
                       Updated {new Date(scheme.updatedAt).toLocaleString()} ·{" "}
                       {scheme.tableCount} tables · {scheme.groups?.length ?? 0}{" "}
                       groups
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={async () => {
-                        if (saveStatus === "dirty") {
-                          await saveCurrentScheme();
-                        }
-                        loadScheme(scheme.id);
-                        setLoadSchemesOpen(false);
-                      }}
-                    >
-                      Load
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        deleteScheme(scheme.id);
-                        toast.success("Project deleted.");
-                      }}
-                      aria-label={`Delete ${scheme.name}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Badge variant="secondary">
+                        {formatLabels[scheme.format]}
+                      </Badge>
+                      {scheme.codeFormat && scheme.format === "ui" ? (
+                        <Badge variant="secondary">
+                          Source {formatLabels[scheme.codeFormat]}
+                        </Badge>
+                      ) : null}
+                      <Badge variant="secondary">
+                        Created {formatProjectTimestamp(scheme.createdAt)}
+                      </Badge>
+                    </div>
+                    <div className="mt-3 grid w-full grid-cols-3 gap-2">
+                      <div className="border-border bg-background/70 rounded-lg border p-3">
+                        <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+                          <DatabaseZap className="size-3.5" />
+                          Tables
+                        </div>
+                        <div className="mt-2 text-lg font-semibold">
+                          {scheme.tableCount}
+                        </div>
+                      </div>
+                      <div className="border-border bg-background/70 rounded-lg border p-3">
+                        <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+                          <GitBranch className="size-3.5" />
+                          Links
+                        </div>
+                        <div className="mt-2 text-lg font-semibold">
+                          {scheme.relationshipCount}
+                        </div>
+                      </div>
+                      <div className="border-border bg-background/70 rounded-lg border p-3">
+                        <div className="text-muted-foreground flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase">
+                          <Layers3 className="size-3.5" />
+                          Groups
+                        </div>
+                        <div className="mt-2 text-lg font-semibold">
+                          {scheme.groups?.length ?? 0}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))

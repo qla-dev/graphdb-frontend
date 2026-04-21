@@ -61,8 +61,24 @@ function parseReferenceValue(value: string) {
   return table && column ? { table, column } : null;
 }
 
+function truncateLinkLabel(value: string, maxLength = 5) {
+  return value.length > maxLength
+    ? `${value.slice(0, maxLength)}..`
+    : value;
+}
+
 function tableRelationshipCount(table: SchemaTable) {
   return table.columns.filter((column) => column.references).length;
+}
+
+function typeOptionsForColumn(column: SchemaColumn) {
+  const currentType = column.type.trim();
+
+  if (currentType && !commonTypes.includes(currentType)) {
+    return [currentType, ...commonTypes];
+  }
+
+  return commonTypes;
 }
 
 function schemaTableKey(tables: SchemaTable[]) {
@@ -125,6 +141,35 @@ function ColumnFlags({
   );
 }
 
+function ColumnTypeSelect({
+  column,
+  tableId
+}: {
+  column: SchemaColumn;
+  tableId: string;
+}) {
+  const updateColumn = useSchemaStore((state) => state.updateColumn);
+  const typeOptions = useMemo(() => typeOptionsForColumn(column), [column]);
+
+  return (
+    <Select
+      value={column.type}
+      onValueChange={(value) => updateColumn(tableId, column.id, { type: value })}
+    >
+      <SelectTrigger className="h-9 min-w-0 flex-1" aria-label={`${column.name} data type`}>
+        <SelectValue placeholder="Select type" />
+      </SelectTrigger>
+      <SelectContent>
+        {typeOptions.map((type, index) => (
+          <SelectItem key={`${type}-${index}`} value={type}>
+            {type}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
+
 function ColumnRow({
   table,
   column,
@@ -150,6 +195,9 @@ function ColumnRow({
       ),
     [column.id, table.id, tables]
   );
+  const selectedReferenceLabel =
+    referenceOptions.find((option) => option.value === referenceValue(column))
+      ?.label ?? "";
 
   return (
     <div className="border-border bg-secondary/85 grid gap-2 rounded-md border p-2 dark:bg-[#090909]">
@@ -161,14 +209,10 @@ function ColumnRow({
           }
           aria-label={`${column.name} column name`}
         />
-        <div className="flex gap-2">
-          <Input
-            value={column.type}
-            list="schema-ui-common-types"
-            onChange={(event) =>
-              updateColumn(table.id, column.id, { type: event.target.value })
-            }
-            aria-label={`${column.name} data type`}
+        <div className="flex min-w-0 gap-2">
+          <ColumnTypeSelect
+            column={column}
+            tableId={table.id}
           />
           <Button
             type="button"
@@ -195,8 +239,14 @@ function ColumnRow({
             )
           }
         >
-          <SelectTrigger className="h-8">
-            <SelectValue placeholder="No link" />
+          <SelectTrigger className="h-8 min-w-0">
+            <SelectValue placeholder="No link">
+              {selectedReferenceLabel ? (
+                <span className="block max-w-full overflow-hidden whitespace-nowrap">
+                  {truncateLinkLabel(selectedReferenceLabel)}
+                </span>
+              ) : undefined}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="none">No link</SelectItem>
@@ -242,12 +292,6 @@ export function SchemaUiEditor() {
 
   return (
     <div className="border-border bg-card h-full min-h-0 border-y dark:bg-[#0d0d0c]">
-      <datalist id="schema-ui-common-types">
-        {commonTypes.map((type) => (
-          <option key={type} value={type} />
-        ))}
-      </datalist>
-
       <ScrollArea className="h-full">
         <div className="space-y-3 p-3">
           <div className="border-border bg-secondary/45 rounded-md border p-3">

@@ -4,9 +4,8 @@ import type {
   SchemaCodeFormat
 } from "@/types/schema";
 
-const PROD_API_BASE_URL = "https://roomsita.com/backend/public/api";
-// const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api";
-const DEFAULT_API_BASE_URL = PROD_API_BASE_URL;
+const LOCAL_API_BASE_URL = "http://127.0.0.1:8000/api";
+const DEFAULT_API_BASE_URL = LOCAL_API_BASE_URL;
 
 function apiBaseUrl() {
   return (

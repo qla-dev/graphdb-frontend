@@ -169,6 +169,10 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const saveStatus = useSchemaStore((state) => state.saveStatus);
   const lastSavedAt = useSchemaStore((state) => state.lastSavedAt);
   const savedSchemes = useSchemaStore((state) => state.savedSchemes);
+  const storageHydrated = useSchemaStore((state) => state.storageHydrated);
+  const projectSelectionRequired = useSchemaStore(
+    (state) => state.projectSelectionRequired
+  );
   const setFormat = useSchemaStore((state) => state.setFormat);
   const setSchemeName = useSchemaStore((state) => state.setSchemeName);
   const createScheme = useSchemaStore((state) => state.createScheme);
@@ -180,6 +184,8 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const saveCurrentScheme = useSchemaStore((state) => state.saveCurrentScheme);
   const setPublishedApi = useSchemaStore((state) => state.setPublishedApi);
   const isAdmin = isAdminSession();
+  const requireProjectSelection =
+    storageHydrated && projectSelectionRequired && !newSchemeOpen;
 
   const filteredSchemes = useMemo(() => {
     const query = schemeSearch.trim().toLowerCase();
@@ -233,6 +239,16 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     return () =>
       document.removeEventListener("fullscreenchange", updateFullscreenState);
   }, []);
+
+  useEffect(() => {
+    if (!requireProjectSelection) {
+      return;
+    }
+
+    setLoadSchemesOpen(false);
+    setAccessProject(null);
+    closeProtectedSchemeDialog();
+  }, [requireProjectSelection]);
 
   const toggleFullscreen = async () => {
     try {
@@ -385,7 +401,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       return;
     }
 
-    if (saveStatus === "dirty") {
+    if (!projectSelectionRequired && saveStatus === "dirty") {
       await saveCurrentScheme();
     }
 
@@ -398,6 +414,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     });
     resetNewSchemeForm();
     setNewSchemeOpen(false);
+    setLoadSchemesOpen(false);
     toast.success(`${cleaned} created.`);
   };
 
@@ -407,7 +424,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       return;
     }
 
-    if (saveStatus === "dirty") {
+    if (!projectSelectionRequired && saveStatus === "dirty") {
       await saveCurrentScheme();
     }
 
@@ -862,19 +879,59 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={loadSchemesOpen} onOpenChange={setLoadSchemesOpen}>
-        <DialogContent className="max-w-4xl">
+      <Dialog
+        open={loadSchemesOpen || requireProjectSelection}
+        onOpenChange={(open) => {
+          if (!open && requireProjectSelection) {
+            return;
+          }
+
+          setLoadSchemesOpen(open);
+        }}
+      >
+        <DialogContent
+          showCloseButton={!requireProjectSelection}
+          className="max-w-4xl"
+          onEscapeKeyDown={(event) => {
+            if (requireProjectSelection) {
+              event.preventDefault();
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (requireProjectSelection) {
+              event.preventDefault();
+            }
+          }}
+          onPointerDownOutside={(event) => {
+            if (requireProjectSelection) {
+              event.preventDefault();
+            }
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Load project</DialogTitle>
             <DialogDescription>
-              Open a saved project.
+              {requireProjectSelection
+                ? "Choose a project before continuing."
+                : "Open a saved project."}
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={schemeSearch}
-            onChange={(event) => setSchemeSearch(event.target.value)}
-            placeholder="Search saved projects"
-          />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Input
+              value={schemeSearch}
+              onChange={(event) => setSchemeSearch(event.target.value)}
+              placeholder="Search saved projects"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setNewSchemeOpen(true)}
+              className="sm:w-auto"
+            >
+              <FilePlus2 className="size-4" />
+              New project
+            </Button>
+          </div>
           <div className="grid max-h-[520px] gap-3 overflow-auto pr-1 sm:grid-cols-2">
             {filteredSchemes.length === 0 ? (
               <div className="border-border text-muted-foreground rounded-md border p-6 text-center text-sm">

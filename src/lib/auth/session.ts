@@ -1,5 +1,6 @@
 const SESSION_STORAGE_KEY = "graphdb.session-login";
 const HARDCODED_PASSWORD = "password123";
+export const SESSION_CHANGE_EVENT = "graphdb:session-changed";
 
 const SESSION_USERS = {
   "qla.dev": { isAdmin: false },
@@ -55,8 +56,10 @@ export function setSessionUsername(username: SessionUsername | null) {
 
   if (username) {
     storage.setItem(SESSION_STORAGE_KEY, username);
+    window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
     return;
   }
 
   storage.removeItem(SESSION_STORAGE_KEY);
+  window.dispatchEvent(new Event(SESSION_CHANGE_EVENT));
 }

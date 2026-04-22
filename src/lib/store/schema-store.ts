@@ -60,6 +60,7 @@ interface SchemaStore {
   saveStatus: SaveStatus;
   lastSavedAt: number | null;
   storageHydrated: boolean;
+  projectSelectionRequired: boolean;
   code: string;
   format: SchemaFormat;
   codeFormat: SchemaCodeFormat;
@@ -79,7 +80,11 @@ interface SchemaStore {
   clipboardTableIds: string[];
   undoStack: UndoSnapshot[];
   publishedApi: PublishedApi | null;
-  initializePersistence: () => Promise<void>;
+  initializePersistence: (options?: {
+    autoLoadActive?: boolean;
+    requireProjectSelection?: boolean;
+  }) => Promise<void>;
+  resetForSessionLock: () => void;
   saveCurrentScheme: () => Promise<void>;
   createScheme: (
     name: string,
@@ -461,6 +466,38 @@ const initialCodeByFormat = generateSchemaCodeBundle(initialResult.schema, {
 });
 const initialSchemeId = "project:local-default";
 
+function defaultWorkspaceState(
+  overrides: Partial<SchemaStore> = {}
+): Partial<SchemaStore> {
+  return {
+    currentSchemeId: initialSchemeId,
+    schemeName: "Untitled production project",
+    projectVisibility: "public",
+    projectPassword: "",
+    saveStatus: "dirty",
+    lastSavedAt: null,
+    code: starterDbml,
+    format: "dbml",
+    codeFormat: "dbml",
+    codeByFormat: initialCodeByFormat,
+    schema: initialResult.schema,
+    errors: initialResult.errors,
+    hoveredElement: null,
+    selectedElement: null,
+    searchQuery: "",
+    aiPrompt: "",
+    isGenerating: false,
+    lastAiSummary: null,
+    nodePositions: {},
+    groups: [],
+    selectedTableIds: [],
+    clipboardTableIds: [],
+    undoStack: [],
+    publishedApi: null,
+    ...overrides
+  };
+}
+
 export const useSchemaStore = create<SchemaStore>((set, get) => ({
   currentSchemeId: initialSchemeId,
   schemeName: "Untitled production project",
@@ -470,6 +507,7 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
   saveStatus: "dirty",
   lastSavedAt: null,
   storageHydrated: false,
+  projectSelectionRequired: false,
   code: starterDbml,
   format: "dbml",
   codeFormat: "dbml",
@@ -489,41 +527,67 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
   clipboardTableIds: [],
   undoStack: [],
   publishedApi: null,
-  initializePersistence: async () => {
-    if (get().storageHydrated) {
+  initializePersistence: async (options) => {
+    const autoLoadActive = options?.autoLoadActive ?? true;
+    const requireProjectSelection =
+      options?.requireProjectSelection ?? false;
+
+    if (get().storageHydrated && !requireProjectSelection) {
       return;
     }
 
     const savedSchemes = await loadPersistedProjects();
-    const activeSchemeId = getActiveProjectId();
-    const activeScheme =
-      savedSchemes.find((scheme) => scheme.id === activeSchemeId) ??
-      savedSchemes[0];
+    if (autoLoadActive) {
+      const activeSchemeId = getActiveProjectId();
+      const activeScheme =
+        savedSchemes.find((scheme) => scheme.id === activeSchemeId) ??
+        savedSchemes[0];
 
-    if (activeScheme) {
-      set({
-        ...applyScheme(activeScheme),
-        savedSchemes,
-        storageHydrated: true
-      });
-      return;
+      if (activeScheme) {
+        set({
+          ...applyScheme(activeScheme),
+          savedSchemes,
+          storageHydrated: true,
+          projectSelectionRequired: false
+        });
+        return;
+      }
     }
 
     set({
-      savedSchemes,
-      storageHydrated: true,
-      saveStatus: "dirty"
+      ...defaultWorkspaceState({
+        saveStatus: "saved",
+        savedSchemes,
+        storageHydrated: true,
+        projectSelectionRequired: requireProjectSelection
+      })
+    });
+  },
+  resetForSessionLock: () => {
+    set({
+      ...defaultWorkspaceState({
+        savedSchemes: [],
+        storageHydrated: false,
+        projectSelectionRequired: false
+      })
     });
   },
   saveCurrentScheme: async () => {
+    const state = get();
+    if (state.projectSelectionRequired) {
+      return;
+    }
+
     set({ saveStatus: "saving" });
 
     try {
-      const state = get();
-      const persisted = toPersistedProject(state);
+      const currentState = get();
+      const persisted = toPersistedProject(currentState);
       const savedSchemes = [
         persisted,
-        ...state.savedSchemes.filter((scheme) => scheme.id !== persisted.id)
+        ...currentState.savedSchemes.filter(
+          (scheme) => scheme.id !== persisted.id
+        )
       ].sort((a, b) => b.updatedAt - a.updatedAt);
 
       await savePersistedProjects(savedSchemes);
@@ -551,6 +615,7 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
       schemeName: name.trim() || "Untitled project",
       projectVisibility: visibility,
       projectPassword: password,
+      projectSelectionRequired: false,
       code: starter.code,
       format: starter.format,
       codeFormat: starter.format,
@@ -577,7 +642,10 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
       return;
     }
 
-    set(applyScheme(scheme));
+    set({
+      ...applyScheme(scheme),
+      projectSelectionRequired: false
+    });
     setActiveProjectId(scheme.id);
   },
   deleteScheme: (schemeIdToDelete) => {

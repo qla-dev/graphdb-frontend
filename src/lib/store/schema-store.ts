@@ -24,6 +24,7 @@ import type {
   ParseError,
   ParsedSchema,
   PersistedProject,
+  ProjectVisibility,
   PublishedApi,
   SaveStatus,
   SchemaCodeByFormat,
@@ -53,6 +54,8 @@ interface UndoSnapshot {
 interface SchemaStore {
   currentSchemeId: string;
   schemeName: string;
+  projectVisibility: ProjectVisibility;
+  projectPassword: string;
   savedSchemes: PersistedProject[];
   saveStatus: SaveStatus;
   lastSavedAt: number | null;
@@ -78,7 +81,11 @@ interface SchemaStore {
   publishedApi: PublishedApi | null;
   initializePersistence: () => Promise<void>;
   saveCurrentScheme: () => Promise<void>;
-  createScheme: (name: string, starter?: SchemaPreset) => void;
+  createScheme: (
+    name: string,
+    starter?: SchemaPreset,
+    options?: { visibility?: ProjectVisibility; password?: string }
+  ) => void;
   loadScheme: (schemeId: string) => void;
   deleteScheme: (schemeId: string) => void;
   renameSavedProject: (projectId: string, name: string) => void;
@@ -394,6 +401,8 @@ function toPersistedProject(
   return {
     id: state.currentSchemeId,
     name: state.schemeName.trim() || "Untitled project",
+    visibility: state.projectVisibility,
+    password: state.projectVisibility === "private" ? state.projectPassword : "",
     code: state.code,
     format: state.format,
     codeFormat: state.codeFormat,
@@ -420,6 +429,8 @@ function applyScheme(scheme: PersistedProject) {
   return {
     currentSchemeId: scheme.id,
     schemeName: scheme.name,
+    projectVisibility: scheme.visibility,
+    projectPassword: scheme.password,
     code,
     format: scheme.format,
     codeFormat,
@@ -449,6 +460,8 @@ const initialSchemeId = "project:local-default";
 export const useSchemaStore = create<SchemaStore>((set, get) => ({
   currentSchemeId: initialSchemeId,
   schemeName: "Untitled production project",
+  projectVisibility: "public",
+  projectPassword: "",
   savedSchemes: [],
   saveStatus: "dirty",
   lastSavedAt: null,
@@ -520,16 +533,20 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
       set({ saveStatus: "error" });
     }
   },
-  createScheme: (name, starter = samplePresets[0]) => {
+  createScheme: (name, starter = samplePresets[0], options) => {
     const nextId = projectId();
     const result = parse(starter.code, starter.format);
     const codeByFormat = generateSchemaCodeBundle(result.schema, {
       [starter.format]: starter.code
     });
+    const visibility = options?.visibility === "private" ? "private" : "public";
+    const password = visibility === "private" ? options?.password?.trim() ?? "" : "";
 
     set({
       currentSchemeId: nextId,
       schemeName: name.trim() || "Untitled project",
+      projectVisibility: visibility,
+      projectPassword: password,
       code: starter.code,
       format: starter.format,
       codeFormat: starter.format,
@@ -578,6 +595,8 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
         set({
           currentSchemeId: initialSchemeId,
           schemeName: "Untitled production project",
+          projectVisibility: "public",
+          projectPassword: "",
           code: starterDbml,
           format: "dbml",
           codeFormat: "dbml",

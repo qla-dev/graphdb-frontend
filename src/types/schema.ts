@@ -1,5 +1,6 @@
 export type SchemaCodeFormat = "dbml" | "sql" | "postgresql";
 export type SchemaFormat = "ui" | SchemaCodeFormat;
+export type ProjectVisibility = "private" | "public";
 
 export type SchemaCodeByFormat = Record<SchemaCodeFormat, string>;
 
@@ -119,6 +120,8 @@ export interface SchemaGroup {
 export interface PersistedProject {
   id: string;
   name: string;
+  visibility: ProjectVisibility;
+  password: string;
   code: string;
   format: SchemaFormat;
   codeFormat?: SchemaCodeFormat;

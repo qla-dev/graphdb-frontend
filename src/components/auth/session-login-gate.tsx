@@ -10,31 +10,11 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-
-const SESSION_STORAGE_KEY = "graphdb.session-login";
-const HARDCODED_USERNAME = "qla.dev";
-const HARDCODED_PASSWORD = "password123";
-
-function hasActiveSession() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.sessionStorage.getItem(SESSION_STORAGE_KEY) === HARDCODED_USERNAME;
-}
-
-function setSessionState(isAuthenticated: boolean) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  if (isAuthenticated) {
-    window.sessionStorage.setItem(SESSION_STORAGE_KEY, HARDCODED_USERNAME);
-    return;
-  }
-
-  window.sessionStorage.removeItem(SESSION_STORAGE_KEY);
-}
+import {
+  hasActiveSession,
+  setSessionUsername,
+  validateSessionCredentials
+} from "@/lib/auth/session";
 
 export function SessionLoginGate() {
   const [isAuthenticated, setIsAuthenticated] = useState(hasActiveSession);
@@ -78,11 +58,10 @@ export function SessionLoginGate() {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const isValidLogin =
-      username.trim() === HARDCODED_USERNAME && password === HARDCODED_PASSWORD;
+    const sessionUsername = validateSessionCredentials(username, password);
 
-    if (!isValidLogin) {
-      setSessionState(false);
+    if (!sessionUsername) {
+      setSessionUsername(null);
       wasAuthenticatedRef.current = false;
       setIsAuthenticated(false);
       setErrorMessage("Invalid username or password.");
@@ -90,7 +69,7 @@ export function SessionLoginGate() {
       return;
     }
 
-    setSessionState(true);
+    setSessionUsername(sessionUsername);
     wasAuthenticatedRef.current = true;
     setErrorMessage("");
     setPassword("");

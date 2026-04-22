@@ -12,7 +12,9 @@ import {
   FileJson,
   FilePlus2,
   FolderOpen,
+  Globe2,
   Layers3,
+  LockKeyhole,
   Loader2,
   Maximize2,
   Minimize2,
@@ -62,11 +64,17 @@ import {
   startPublish,
   type PublishStatusResponse
 } from "@/lib/api/publish-client";
+import { isAdminSession } from "@/lib/auth/session";
 import { exportSource, type ExportKind } from "@/lib/export/schema-export";
 import { formatLabels, samplePresets } from "@/lib/samples";
 import { useSchemaStore } from "@/lib/store/schema-store";
 import { cn } from "@/lib/utils";
-import type { SchemaFormat, SchemaPreset } from "@/types/schema";
+import type {
+  PersistedProject,
+  ProjectVisibility,
+  SchemaFormat,
+  SchemaPreset
+} from "@/types/schema";
 
 const exportItems: Array<{
   kind: ExportKind;
@@ -110,6 +118,16 @@ function formatProjectTimestamp(timestamp: number) {
   });
 }
 
+function accessBadgeVariant(visibility: ProjectVisibility) {
+  return visibility === "private" ? "danger" : "default";
+}
+
+function accessCopy(visibility: ProjectVisibility) {
+  return visibility === "private"
+    ? "Private project, password required"
+    : "Public project, opens without password";
+}
+
 export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const { theme, toggleTheme } = useGraphTheme();
   const [isEditingName, setIsEditingName] = useState(false);
@@ -118,10 +136,17 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const [loadSchemesOpen, setLoadSchemesOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [newSchemeName, setNewSchemeName] = useState("");
+  const [newSchemeVisibility, setNewSchemeVisibility] =
+    useState<ProjectVisibility>("public");
+  const [newSchemePassword, setNewSchemePassword] = useState("");
   const [newSchemePresetId, setNewSchemePresetId] = useState(
     samplePresets[0].id
   );
   const [schemeSearch, setSchemeSearch] = useState("");
+  const [pendingProtectedScheme, setPendingProtectedScheme] =
+    useState<PersistedProject | null>(null);
+  const [loadSchemePassword, setLoadSchemePassword] = useState("");
+  const [loadSchemePasswordError, setLoadSchemePasswordError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
   const [publishStatus, setPublishStatus] =
@@ -131,6 +156,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const codeFormat = useSchemaStore((state) => state.codeFormat);
   const currentSchemeId = useSchemaStore((state) => state.currentSchemeId);
   const schemeName = useSchemaStore((state) => state.schemeName);
+  const projectVisibility = useSchemaStore((state) => state.projectVisibility);
   const schema = useSchemaStore((state) => state.schema);
   const errors = useSchemaStore((state) => state.errors);
   const groups = useSchemaStore((state) => state.groups);
@@ -166,6 +192,26 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const beginNameEdit = () => {
     setDraftName(schemeName);
     setIsEditingName(true);
+  };
+
+  const resetNewSchemeForm = () => {
+    setNewSchemeName("");
+    setNewSchemeVisibility("public");
+    setNewSchemePassword("");
+    setNewSchemePresetId(samplePresets[0].id);
+  };
+
+  const handleNewSchemeOpenChange = (open: boolean) => {
+    setNewSchemeOpen(open);
+    if (!open) {
+      resetNewSchemeForm();
+    }
+  };
+
+  const closeProtectedSchemeDialog = () => {
+    setPendingProtectedScheme(null);
+    setLoadSchemePassword("");
+    setLoadSchemePasswordError("");
   };
 
   useEffect(() => {
@@ -322,6 +368,14 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       return;
     }
 
+    const password =
+      newSchemeVisibility === "private" ? newSchemePassword.trim() : "";
+
+    if (newSchemeVisibility === "private" && !password) {
+      toast.error("Password is required for private projects.");
+      return;
+    }
+
     if (saveStatus === "dirty") {
       await saveCurrentScheme();
     }
@@ -329,19 +383,57 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     const preset =
       samplePresets.find((item) => item.id === newSchemePresetId) ??
       samplePresets[0];
-    createScheme(cleaned, preset);
-    setNewSchemeName("");
+    createScheme(cleaned, preset, {
+      visibility: newSchemeVisibility,
+      password
+    });
+    resetNewSchemeForm();
     setNewSchemeOpen(false);
     toast.success(`${cleaned} created.`);
   };
 
-  const handleLoadSavedScheme = async (schemeId: string) => {
+  const handleLoadSavedScheme = async (scheme: PersistedProject) => {
+    if (scheme.id === currentSchemeId) {
+      setLoadSchemesOpen(false);
+      return;
+    }
+
     if (saveStatus === "dirty") {
       await saveCurrentScheme();
     }
 
-    loadScheme(schemeId);
+    if (scheme.visibility === "private" && !isAdminSession()) {
+      setPendingProtectedScheme(scheme);
+      setLoadSchemePassword("");
+      setLoadSchemePasswordError("");
+      return;
+    }
+
+    loadScheme(scheme.id);
     setLoadSchemesOpen(false);
+  };
+
+  const handleProtectedSchemeUnlock = () => {
+    if (!pendingProtectedScheme) {
+      return;
+    }
+
+    if (isAdminSession()) {
+      loadScheme(pendingProtectedScheme.id);
+      setLoadSchemesOpen(false);
+      closeProtectedSchemeDialog();
+      return;
+    }
+
+    if (loadSchemePassword !== pendingProtectedScheme.password) {
+      setLoadSchemePassword("");
+      setLoadSchemePasswordError("Incorrect project password.");
+      return;
+    }
+
+    loadScheme(pendingProtectedScheme.id);
+    setLoadSchemesOpen(false);
+    closeProtectedSchemeDialog();
   };
 
   return (
@@ -388,6 +480,18 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   {schemeName}
                 </button>
               )}
+              <Badge
+                variant={accessBadgeVariant(projectVisibility)}
+                className="gap-1 px-2 py-1"
+                title={accessCopy(projectVisibility)}
+              >
+                {projectVisibility === "private" ? (
+                  <LockKeyhole className="size-3" />
+                ) : (
+                  <Globe2 className="size-3" />
+                )}
+                {projectVisibility}
+              </Badge>
               {!isEditingName ? (
                 <button
                   className="text-muted-foreground hover:text-foreground opacity-0 transition-opacity group-hover:opacity-100"
@@ -624,7 +728,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
         </div>
       </header>
 
-      <Dialog open={newSchemeOpen} onOpenChange={setNewSchemeOpen}>
+      <Dialog open={newSchemeOpen} onOpenChange={handleNewSchemeOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>New project</DialogTitle>
@@ -668,9 +772,60 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <label className="text-muted-foreground text-xs font-semibold tracking-[0.16em] uppercase">
+                Access
+              </label>
+              <Select
+                value={newSchemeVisibility}
+                onValueChange={(value) => {
+                  const visibility = value as ProjectVisibility;
+                  setNewSchemeVisibility(visibility);
+                  if (visibility !== "private") {
+                    setNewSchemePassword("");
+                  }
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="public">Public</SelectItem>
+                  <SelectItem value="private">
+                    Private (password required)
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-muted-foreground text-xs">
+                {newSchemeVisibility === "private"
+                  ? "Private projects require a password every time they are opened."
+                  : "Public projects open without a password."}
+              </p>
+            </div>
+            {newSchemeVisibility === "private" ? (
+              <div className="space-y-2">
+                <label className="text-muted-foreground text-xs font-semibold tracking-[0.16em] uppercase">
+                  Project password
+                </label>
+                <Input
+                  type="password"
+                  value={newSchemePassword}
+                  onChange={(event) => setNewSchemePassword(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      void handleCreateScheme();
+                    }
+                  }}
+                  placeholder="Enter project password"
+                />
+              </div>
+            ) : null}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewSchemeOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => handleNewSchemeOpenChange(false)}
+            >
               Cancel
             </Button>
             <Button onClick={() => void handleCreateScheme()}>
@@ -705,11 +860,11 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   key={scheme.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => void handleLoadSavedScheme(scheme.id)}
+                  onClick={() => void handleLoadSavedScheme(scheme)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      void handleLoadSavedScheme(scheme.id);
+                      void handleLoadSavedScheme(scheme);
                     }
                   }}
                   className={cn(
@@ -719,7 +874,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                   )}
                 >
                   <div className="min-w-0">
-                    <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="truncate text-base font-semibold">
@@ -730,19 +885,33 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                           ) : null}
                         </div>
                       </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteScheme(scheme.id);
-                          toast.success("Project deleted.");
-                        }}
-                        aria-label={`Delete ${scheme.name}`}
-                        className="shrink-0"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <Badge
+                          variant={accessBadgeVariant(scheme.visibility)}
+                          className="gap-1 px-2.5 py-1"
+                          title={accessCopy(scheme.visibility)}
+                        >
+                          {scheme.visibility === "private" ? (
+                            <LockKeyhole className="size-3" />
+                          ) : (
+                            <Globe2 className="size-3" />
+                          )}
+                          {scheme.visibility}
+                        </Badge>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            deleteScheme(scheme.id);
+                            toast.success("Project deleted.");
+                          }}
+                          aria-label={`Delete ${scheme.name}`}
+                          className="shrink-0"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
                     </div>
                     <div className="text-muted-foreground mt-1 text-xs">
                       Updated {new Date(scheme.updatedAt).toLocaleString()} ·{" "}
@@ -796,6 +965,64 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
               ))
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(pendingProtectedScheme)}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeProtectedSchemeDialog();
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Private project</DialogTitle>
+            <DialogDescription>
+              {pendingProtectedScheme
+                ? `Enter the password for ${pendingProtectedScheme.name}.`
+                : "Enter the project password to continue."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-muted-foreground text-xs font-semibold tracking-[0.16em] uppercase">
+                Password
+              </label>
+              <Input
+                autoFocus
+                type="password"
+                value={loadSchemePassword}
+                onChange={(event) => {
+                  setLoadSchemePassword(event.target.value);
+                  if (loadSchemePasswordError) {
+                    setLoadSchemePasswordError("");
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    handleProtectedSchemeUnlock();
+                  }
+                }}
+                placeholder="Enter project password"
+              />
+            </div>
+            {loadSchemePasswordError ? (
+              <p className="text-destructive text-sm">
+                {loadSchemePasswordError}
+              </p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => closeProtectedSchemeDialog()}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleProtectedSchemeUnlock}>Open project</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

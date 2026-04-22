@@ -30,8 +30,14 @@ function browserStorage() {
 }
 
 function normalizeProject(project: PersistedProject): PersistedProject {
+  const password =
+    typeof project.password === "string" ? project.password.trim() : "";
+  const visibility = password ? "private" : "public";
+
   return {
     ...project,
+    visibility,
+    password,
     nodePositions: project.nodePositions ?? {},
     groups: project.groups ?? [],
     tableCount: project.tableCount ?? 0,
@@ -56,11 +62,13 @@ function loadLocalProjects(): PersistedProject[] {
       return [];
     }
 
-    return parsed.map((scheme) => ({
-      ...scheme,
-      nodePositions: scheme.nodePositions ?? {},
-      groups: scheme.groups ?? scheme.sections ?? []
-    }));
+    return parsed.map((scheme) =>
+      normalizeProject({
+        ...scheme,
+        nodePositions: scheme.nodePositions ?? {},
+        groups: scheme.groups ?? scheme.sections ?? []
+      })
+    );
   } catch {
     return [];
   }

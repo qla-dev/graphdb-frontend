@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -179,6 +180,7 @@ export function LeftWorkspacePanel({
   onCollapseSidebar
 }: LeftWorkspacePanelProps) {
   const [tab, setTab] = useState("code");
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(
     null
   );
@@ -421,7 +423,11 @@ export function LeftWorkspacePanel({
                   <FileInput className="size-4" />
                   Import code
                 </Button>
-                <Button variant="outline" size="sm" onClick={resetCode}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setResetDialogOpen(true)}
+                >
                   <RotateCcw className="size-4" />
                   Reset
                 </Button>
@@ -546,6 +552,19 @@ export function LeftWorkspacePanel({
             </ScrollArea>
           </TabsContent>
         </Tabs>
+        <ConfirmDestructiveDialog
+          open={resetDialogOpen}
+          title="Reset schema?"
+          description="This will replace the current schema with the default starter for the active format."
+          warningMessage="Current code, layout, and unsaved schema changes will be lost!"
+          confirmLabel="Reset schema"
+          onCancel={() => setResetDialogOpen(false)}
+          onConfirm={() => {
+            resetCode();
+            setResetDialogOpen(false);
+            toast.success("Schema reset.");
+          }}
+        />
       </aside>
     </>
   );

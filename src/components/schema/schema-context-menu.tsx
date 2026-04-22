@@ -1,10 +1,19 @@
-import { Copy, Group, Layers, Scissors, ClipboardPaste } from "lucide-react";
+import {
+  ClipboardPaste,
+  Copy,
+  Group,
+  Layers,
+  Scissors,
+  Trash2
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface SchemaContextMenuState {
   x: number;
   y: number;
   tableIds: string[];
+  groupId?: string;
+  groupTitle?: string;
 }
 
 interface SchemaContextMenuProps {
@@ -16,15 +25,8 @@ interface SchemaContextMenuProps {
   onPaste: () => void;
   onGroup: () => void;
   onCreateGroup: () => void;
+  onDeleteGroup: () => void;
 }
-
-const items = [
-  { key: "copy", label: "Copy", icon: Copy },
-  { key: "cut", label: "Cut", icon: Scissors },
-  { key: "paste", label: "Paste", icon: ClipboardPaste },
-  { key: "group", label: "Group", icon: Group },
-  { key: "createGroup", label: "Create Group", icon: Layers }
-] as const;
 
 export function SchemaContextMenu({
   state,
@@ -34,18 +36,31 @@ export function SchemaContextMenu({
   onCut,
   onPaste,
   onGroup,
-  onCreateGroup
+  onCreateGroup,
+  onDeleteGroup
 }: SchemaContextMenuProps) {
   if (!state) {
     return null;
   }
+
+  const items = [
+    { key: "copy", label: "Copy", icon: Copy },
+    { key: "cut", label: "Cut", icon: Scissors },
+    { key: "paste", label: "Paste", icon: ClipboardPaste },
+    { key: "group", label: "Group", icon: Group },
+    { key: "createGroup", label: "Create Group", icon: Layers },
+    ...(state.groupId
+      ? ([{ key: "deleteGroup", label: "Delete group", icon: Trash2 }] as const)
+      : [])
+  ] as const;
 
   const handlers = {
     copy: onCopy,
     cut: onCut,
     paste: onPaste,
     group: onGroup,
-    createGroup: onCreateGroup
+    createGroup: onCreateGroup,
+    deleteGroup: onDeleteGroup
   };
 
   return (
@@ -60,7 +75,9 @@ export function SchemaContextMenu({
         style={{ left: state.x, top: state.y }}
       >
         <div className="text-muted-foreground px-2.5 py-2 text-[10px] font-semibold tracking-[0.16em] uppercase">
-          {state.tableIds.length} selected
+          {state.groupId
+            ? state.groupTitle ?? "Group"
+            : `${state.tableIds.length} selected`}
         </div>
         {items.map((item) => {
           const Icon = item.icon;

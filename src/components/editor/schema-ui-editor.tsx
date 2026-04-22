@@ -11,14 +11,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle
-} from "@/components/ui/dialog";
+import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -510,45 +503,19 @@ export function SchemaUiEditor() {
         </div>
       </ScrollArea>
 
-      <Dialog
+      <ConfirmDestructiveDialog
         open={Boolean(tablePendingDelete)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setTablePendingDelete(null);
+        title="Delete table?"
+        description={`This will remove ${tablePendingDelete?.name ?? "this table"} and clear links pointing to it.`}
+        confirmLabel="Delete table"
+        onCancel={() => setTablePendingDelete(null)}
+        onConfirm={() => {
+          if (tablePendingDelete) {
+            deleteTable(tablePendingDelete.id);
           }
+          setTablePendingDelete(null);
         }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete table?</DialogTitle>
-            <DialogDescription>
-              This will remove {tablePendingDelete?.name ?? "this table"} and
-              clear links pointing to it.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setTablePendingDelete(null)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={() => {
-                if (tablePendingDelete) {
-                  deleteTable(tablePendingDelete.id);
-                }
-                setTablePendingDelete(null);
-              }}
-            >
-              Delete table
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      />
     </div>
   );
 }

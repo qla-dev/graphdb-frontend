@@ -20,6 +20,7 @@ import {
 } from "@xyflow/react";
 import { AlertTriangle, ChevronRight, Database, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { ConfirmDestructiveDialog } from "@/components/ui/confirm-destructive-dialog";
 import { Button } from "@/components/ui/button";
 import { DatabaseMinimap } from "@/components/schema/database-minimap";
 import {
@@ -163,6 +164,7 @@ function SchemaCanvasInner({
     (state) => state.setSelectedTableIds
   );
   const addGroup = useSchemaStore((state) => state.addGroup);
+  const deleteGroup = useSchemaStore((state) => state.deleteGroup);
   const updateGroupBounds = useSchemaStore((state) => state.updateGroupBounds);
   const copySelectedTables = useSchemaStore(
     (state) => state.copySelectedTables
@@ -175,6 +177,10 @@ function SchemaCanvasInner({
   const [contextMenu, setContextMenu] = useState<SchemaContextMenuState | null>(
     null
   );
+  const [groupPendingDelete, setGroupPendingDelete] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
   const exportSurfaceRef = useRef<HTMLDivElement | null>(null);
 
   const flowElements = useMemo(
@@ -595,10 +601,13 @@ function SchemaCanvasInner({
       return;
     }
 
+    setSelectedElement({ kind: "group", id: node.id });
     setContextMenu({
       x: event.clientX,
       y: event.clientY,
-      tableIds: selectedTableIds
+      tableIds: selectedTableIds,
+      groupId: node.id,
+      groupTitle: node.data.group.title
     });
   };
 
@@ -721,6 +730,30 @@ function SchemaCanvasInner({
         onPaste={pasteClipboard}
         onGroup={groupSelectedTables}
         onCreateGroup={createGroupFromSelection}
+        onDeleteGroup={() => {
+          if (contextMenu?.groupId) {
+            setGroupPendingDelete({
+              id: contextMenu.groupId,
+              title: contextMenu.groupTitle ?? "this group"
+            });
+          }
+        }}
+      />
+
+      <ConfirmDestructiveDialog
+        open={Boolean(groupPendingDelete)}
+        title="Delete group?"
+        description={`This will remove ${groupPendingDelete?.title ?? "this group"} from the canvas.`}
+        warningMessage="Tables inside group will not be deleted!"
+        confirmLabel="Remove group"
+        onCancel={() => setGroupPendingDelete(null)}
+        onConfirm={() => {
+          if (groupPendingDelete) {
+            deleteGroup(groupPendingDelete.id);
+            toast.success("Group removed.");
+          }
+          setGroupPendingDelete(null);
+        }}
       />
 
       {schema.tables.length === 0 ? (

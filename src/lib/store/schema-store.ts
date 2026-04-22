@@ -121,6 +121,7 @@ interface SchemaStore {
     tableIds: string[],
     bounds: CanvasBounds
   ) => SchemaGroup;
+  deleteGroup: (groupId: string) => void;
   updateGroupBounds: (groupId: string, bounds: CanvasBounds) => void;
   copySelectedTables: () => string[];
   cutSelectedTables: () => string[];
@@ -437,9 +438,7 @@ function applyScheme(scheme: PersistedProject) {
     codeByFormat: generatedCodeByFormat,
     schema: result.schema,
     errors: result.errors,
-    nodePositions: shouldResetDefaultLayout(result.schema)
-      ? {}
-      : filterNodePositions(scheme.nodePositions ?? {}, result.schema),
+    nodePositions: filterNodePositions(scheme.nodePositions ?? {}, result.schema),
     groups: scheme.groups ?? [],
     hoveredElement: null,
     selectedElement: null,
@@ -1056,6 +1055,17 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
     }));
     return group;
   },
+  deleteGroup: (groupId) =>
+    set((state) => ({
+      groups: state.groups.filter((group) => group.id !== groupId),
+      selectedElement:
+        state.selectedElement?.kind === "group" &&
+        state.selectedElement.id === groupId
+          ? null
+          : state.selectedElement,
+      undoStack: nextUndoStack(state),
+      ...markDirty(state)
+    })),
   updateGroupBounds: (groupId, bounds) =>
     set((state) => {
       const group = state.groups.find((item) => item.id === groupId);

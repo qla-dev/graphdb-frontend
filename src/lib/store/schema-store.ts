@@ -89,6 +89,11 @@ interface SchemaStore {
   loadScheme: (schemeId: string) => void;
   deleteScheme: (schemeId: string) => void;
   renameSavedProject: (projectId: string, name: string) => void;
+  updateProjectAccess: (
+    projectId: string,
+    visibility: ProjectVisibility,
+    password: string
+  ) => Promise<void>;
   setSchemeName: (name: string) => void;
   setCode: (code: string) => void;
   setFormat: (format: SchemaFormat) => void;
@@ -631,6 +636,58 @@ export const useSchemaStore = create<SchemaStore>((set, get) => ({
       savedSchemes,
       ...(state.currentSchemeId === projectIdToRename
         ? { schemeName: cleaned, saveStatus: "saved" as SaveStatus }
+        : {})
+    }));
+  },
+  updateProjectAccess: async (projectIdToUpdate, visibility, password) => {
+    const nextVisibility = visibility === "private" ? "private" : "public";
+    const nextPassword =
+      nextVisibility === "private" ? password.trim() : "";
+
+    if (nextVisibility === "private" && !nextPassword) {
+      throw new Error("Password is required for private projects.");
+    }
+
+    const state = get();
+    const updatedAt = Date.now();
+
+    const savedSchemes: PersistedProject[] = state.savedSchemes
+      .map((scheme): PersistedProject => {
+        if (scheme.id !== projectIdToUpdate) {
+          return scheme;
+        }
+
+        if (scheme.id === state.currentSchemeId) {
+          return toPersistedProject(
+            {
+              ...state,
+              projectVisibility: nextVisibility,
+              projectPassword: nextPassword
+            },
+            updatedAt
+          );
+        }
+
+        return {
+          ...scheme,
+          visibility: nextVisibility,
+          password: nextPassword,
+          updatedAt
+        };
+      })
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+
+    await savePersistedProjects(savedSchemes);
+
+    set((currentState) => ({
+      savedSchemes,
+      ...(currentState.currentSchemeId === projectIdToUpdate
+        ? {
+            projectVisibility: nextVisibility,
+            projectPassword: nextPassword,
+            saveStatus: "saved" as SaveStatus,
+            lastSavedAt: updatedAt
+          }
         : {})
     }));
   },

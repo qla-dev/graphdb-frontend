@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Globe2,
   Layers3,
+  Lock,
   LockKeyhole,
   Loader2,
   Maximize2,
@@ -26,6 +27,7 @@ import {
   Trash2
 } from "lucide-react";
 import { toast } from "sonner";
+import { ProjectAccessDialog } from "@/components/dashboard/project-access-dialog";
 import { useGraphTheme } from "@/components/providers/theme-provider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -145,6 +147,9 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const [schemeSearch, setSchemeSearch] = useState("");
   const [pendingProtectedScheme, setPendingProtectedScheme] =
     useState<PersistedProject | null>(null);
+  const [accessProject, setAccessProject] = useState<PersistedProject | null>(
+    null
+  );
   const [loadSchemePassword, setLoadSchemePassword] = useState("");
   const [loadSchemePasswordError, setLoadSchemePasswordError] = useState("");
   const [isPublishing, setIsPublishing] = useState(false);
@@ -169,8 +174,12 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   const createScheme = useSchemaStore((state) => state.createScheme);
   const loadScheme = useSchemaStore((state) => state.loadScheme);
   const deleteScheme = useSchemaStore((state) => state.deleteScheme);
+  const updateProjectAccess = useSchemaStore(
+    (state) => state.updateProjectAccess
+  );
   const saveCurrentScheme = useSchemaStore((state) => state.saveCurrentScheme);
   const setPublishedApi = useSchemaStore((state) => state.setPublishedApi);
+  const isAdmin = isAdminSession();
 
   const filteredSchemes = useMemo(() => {
     const query = schemeSearch.trim().toLowerCase();
@@ -434,6 +443,23 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
     loadScheme(pendingProtectedScheme.id);
     setLoadSchemesOpen(false);
     closeProtectedSchemeDialog();
+  };
+
+  const handleSaveProjectAccess = async (payload: {
+    visibility: ProjectVisibility;
+    password: string;
+  }) => {
+    if (!accessProject) {
+      return;
+    }
+
+    await updateProjectAccess(
+      accessProject.id,
+      payload.visibility,
+      payload.password
+    );
+    setAccessProject(null);
+    toast.success("Project access updated.");
   };
 
   return (
@@ -898,6 +924,20 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
                           )}
                           {scheme.visibility}
                         </Badge>
+                        {isAdmin ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setAccessProject(scheme);
+                            }}
+                            aria-label={`Edit access for ${scheme.name}`}
+                            className="shrink-0"
+                          >
+                            <Lock className="size-4" />
+                          </Button>
+                        ) : null}
                         <Button
                           size="icon"
                           variant="ghost"
@@ -967,6 +1007,13 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ProjectAccessDialog
+        open={Boolean(accessProject)}
+        project={accessProject}
+        onClose={() => setAccessProject(null)}
+        onSave={handleSaveProjectAccess}
+      />
 
       <Dialog
         open={Boolean(pendingProtectedScheme)}

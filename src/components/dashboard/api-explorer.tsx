@@ -2,38 +2,15 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Clipboard, Database } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  buildGeneratedApiModels,
+  type GeneratedApiEndpoint,
+  type GeneratedApiModel
+} from "@/lib/api/generated-api";
 import { useSchemaStore } from "@/lib/store/schema-store";
-import type { SchemaColumn, SchemaTable } from "@/types/schema";
-
-type CrudAction = "create" | "read" | "update" | "delete";
-type ApiMethod = "GET" | "POST" | "PUT" | "DELETE";
-
-interface ApiEndpoint {
-  id: string;
-  method: ApiMethod;
-  action: CrudAction;
-  path: string;
-  description: string;
-  sample: string;
-  parameters: string[];
-}
-
-interface ApiModel {
-  id: string;
-  title: string;
-  table: SchemaTable;
-  endpoints: ApiEndpoint[];
-}
-
-const methodByAction: Record<CrudAction, ApiMethod> = {
-  create: "POST",
-  read: "GET",
-  update: "PUT",
-  delete: "DELETE"
-};
 
 const methodStyles: Record<
-  ApiMethod,
+  GeneratedApiEndpoint["method"],
   {
     badge: string;
     panel: string;
@@ -89,129 +66,7 @@ const methodStyles: Record<
   }
 };
 
-function pathSegment(name: string) {
-  return name.replace(/[^a-zA-Z0-9_]+/g, "-").replace(/^-+|-+$/g, "");
-}
-
-function routeKey(table: SchemaTable) {
-  const primaryColumn = table.columns.find((column) => column.isPrimaryKey);
-  return primaryColumn?.name ?? table.columns[0]?.name ?? "id";
-}
-
-function sampleValue(column: SchemaColumn) {
-  const type = column.type.toLowerCase();
-  if (
-    column.isPrimaryKey ||
-    /\b(bigint|int|integer|smallint|tinyint)\b/.test(type)
-  ) {
-    return 1;
-  }
-  if (/\b(decimal|double|float|numeric|real)\b/.test(type)) {
-    return 99.95;
-  }
-  if (/\b(bool|boolean|bit)\b/.test(type)) {
-    return true;
-  }
-  if (/\b(date|time|timestamp|datetime)\b/.test(type)) {
-    return "2026-04-18 12:17:00";
-  }
-  if (/\b(json)\b/.test(type)) {
-    return { value: "sample" };
-  }
-  return `${column.name}_value`;
-}
-
-function objectFromColumns(columns: SchemaColumn[]) {
-  return columns.reduce<Record<string, unknown>>((payload, column) => {
-    payload[column.name] = sampleValue(column);
-    return payload;
-  }, {});
-}
-
-function primaryWhere(table: SchemaTable) {
-  const primaryColumns = table.columns.filter((column) => column.isPrimaryKey);
-  const whereColumns =
-    primaryColumns.length > 0 ? primaryColumns : table.columns.slice(0, 1);
-  return objectFromColumns(whereColumns);
-}
-
-function buildEndpointForBase(
-  table: SchemaTable,
-  action: CrudAction,
-  apiBasePath: string
-): ApiEndpoint {
-  const model = pathSegment(table.name) || table.id;
-  const key = routeKey(table);
-  const writableColumns = table.columns.filter(
-    (column) => !column.isPrimaryKey
-  );
-  const dataColumns =
-    writableColumns.length > 0 ? writableColumns : table.columns;
-  const detailPath = `/api/${model}/{${key}}`;
-  const normalizedBase = apiBasePath.replace(/\/+$/, "");
-  const publishedDetailPath = `${normalizedBase}/${model}/{${key}}`;
-  const paths: Record<CrudAction, string> = {
-    create: `${normalizedBase}/${model}`,
-    read: `${normalizedBase}/${model}`,
-    update: apiBasePath === "/api" ? detailPath : publishedDetailPath,
-    delete: apiBasePath === "/api" ? detailPath : publishedDetailPath
-  };
-  const title = table.schema ? `${table.schema}.${table.name}` : table.name;
-
-  const samples: Record<CrudAction, Record<string, unknown>> = {
-    create: {
-      model: table.name,
-      data: objectFromColumns(dataColumns)
-    },
-    read: {
-      model: table.name,
-      columns: table.columns.map((column) => column.name),
-      where: primaryWhere(table),
-      limit: 50
-    },
-    update: {
-      model: table.name,
-      where: primaryWhere(table),
-      data: objectFromColumns(
-        dataColumns.slice(0, Math.max(1, Math.min(3, dataColumns.length)))
-      )
-    },
-    delete: {
-      model: table.name,
-      where: primaryWhere(table)
-    }
-  };
-
-  const descriptions: Record<CrudAction, string> = {
-    create: `Create a new ${title} row.`,
-    read: `Read ${title} rows with filters, selected columns, and limit.`,
-    update: `Update existing ${title} rows by condition.`,
-    delete: `Delete ${title} rows by condition.`
-  };
-
-  return {
-    id: `${table.id}-${action}`,
-    method: methodByAction[action],
-    action,
-    path: paths[action],
-    description: descriptions[action],
-    parameters: table.columns.map((column) => column.name),
-    sample: JSON.stringify(samples[action], null, 2)
-  };
-}
-
-function buildApiModels(tables: SchemaTable[], apiBasePath: string): ApiModel[] {
-  return tables.map((table) => ({
-    id: table.id,
-    title: table.schema ? `${table.schema}.${table.name}` : table.name,
-    table,
-    endpoints: (["create", "read", "update", "delete"] as CrudAction[]).map(
-      (action) => buildEndpointForBase(table, action, apiBasePath)
-    )
-  }));
-}
-
-function MethodBadge({ method }: { method: ApiEndpoint["method"] }) {
+function MethodBadge({ method }: { method: GeneratedApiEndpoint["method"] }) {
   const styles = methodStyles[method];
 
   return (
@@ -228,7 +83,7 @@ function EndpointRow({
   expanded,
   onToggle
 }: {
-  endpoint: ApiEndpoint;
+  endpoint: GeneratedApiEndpoint;
   expanded: boolean;
   onToggle: () => void;
 }) {
@@ -298,6 +153,9 @@ function EndpointRow({
             </a>
           </div>
 
+          <div className="mt-5 text-xs font-semibold tracking-[0.14em] text-slate-600 uppercase dark:text-slate-400">
+            {endpoint.sampleLabel}
+          </div>
           <pre className="mt-5 max-h-80 overflow-auto rounded bg-slate-200/70 p-3 font-mono text-sm leading-6 text-violet-700 dark:bg-black/35 dark:text-violet-300">
             <code>{endpoint.sample}</code>
           </pre>
@@ -340,7 +198,7 @@ function ApiModelSection({
   onToggleModel,
   onToggleEndpoint
 }: {
-  model: ApiModel;
+  model: GeneratedApiModel;
   expanded: boolean;
   expandedEndpointId: string | null;
   onToggleModel: () => void;
@@ -388,10 +246,9 @@ function ApiModelSection({
 export function ApiExplorer() {
   const schema = useSchemaStore((state) => state.schema);
   const publishedApi = useSchemaStore((state) => state.publishedApi);
-  const apiBasePath = publishedApi?.apiBasePath ?? "/api";
   const apiModels = useMemo(
-    () => buildApiModels(schema.tables, apiBasePath),
-    [apiBasePath, schema.tables]
+    () => buildGeneratedApiModels(schema.tables, { publishedApi }),
+    [publishedApi, schema.tables]
   );
   const defaultExpandedModelIds = useMemo(
     () => new Set(apiModels.map((model) => model.id)),

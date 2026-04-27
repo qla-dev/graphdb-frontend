@@ -84,6 +84,7 @@ const exportItems: Array<{
   icon: ComponentType<{ className?: string }>;
 }> = [
   { kind: "json", label: "Schema JSON", icon: FileJson },
+  { kind: "postman", label: "Postman collection", icon: Layers3 },
   { kind: "code", label: "Source code", icon: FileCode2 },
   { kind: "png", label: "PNG image", icon: Download },
   { kind: "pdf", label: "PDF document", icon: Download }
@@ -183,6 +184,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
   );
   const saveCurrentScheme = useSchemaStore((state) => state.saveCurrentScheme);
   const setPublishedApi = useSchemaStore((state) => state.setPublishedApi);
+  const publishedApi = useSchemaStore((state) => state.publishedApi);
   const isAdmin = isAdminSession();
   const requireProjectSelection =
     storageHydrated && projectSelectionRequired && !newSchemeOpen;
@@ -283,7 +285,8 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
       code,
       format: codeFormat,
       nodePositions,
-      groups
+      groups,
+      publishedApi
     });
     toast.success(result.message);
   };
@@ -661,7 +664,7 @@ export function TopNav({ activeView, onViewChange }: TopNavProps) {
             <DropdownMenuContent align="end">
               {exportItems.map((item, index) => (
                 <div key={item.kind}>
-                  {index === 2 ? <DropdownMenuSeparator /> : null}
+                  {index === 3 ? <DropdownMenuSeparator /> : null}
                   <DropdownMenuItem
                     onClick={() => void handleExport(item.kind)}
                   >

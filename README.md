@@ -46,7 +46,7 @@ npm run format
 - Draggable table positions preserved in state while editing
 - Multi-select table grouping with group rectangles and a right-click context menu
 - Mock AI provider behind an `AiSchemaProvider` interface
-- Export service for JSON, source code, PNG, and PDF downloads
+- Export service for JSON, Postman collection, source code, PNG, and PDF downloads
 - Sample schema presets for DBML, SQL, and PostgreSQL
 
 ## Architecture
@@ -80,7 +80,7 @@ src/lib/ai
   AI provider contract and local mock provider
 
 src/lib/export
-  Export service for JSON, source code, PNG, and PDF
+  Export service for JSON, Postman collection, source code, PNG, and PDF
 
 src/lib/store
   Zustand app state and actions

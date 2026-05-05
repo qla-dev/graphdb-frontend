@@ -50,10 +50,7 @@ const methodByAction: Record<CrudAction, ApiMethod> = {
 };
 
 function apiBasePathForExplorer(publishedApi?: PublishedApi | null) {
-  return (
-    publishedApi?.apiBasePath?.replace(/\/+$/, "") ||
-    "/api/published/{schemaSlug}"
-  );
+  return publishedApi?.apiBasePath?.replace(/\/+$/, "") || "/api";
 }
 
 function tableTitle(table: SchemaTable) {
